@@ -126,7 +126,7 @@ Computes and plots the Empirical Cumulative Distribution Function (ECDF) of the 
     pdf = count / len(errors)
     # Compute the cumulative distribution function (CDF) from the PDF
     cdf = np.cumsum(pdf)
-    
+
     # Prepare data for plotting
     bins_count[0] = 0
     cdf = np.append([0], cdf)
@@ -141,7 +141,7 @@ Computes and plots the Empirical Cumulative Distribution Function (ECDF) of the 
     plt.grid()
 
     if outfile is not None:
-        import tikzplotlib
-        tikzplotlib.save(outfile)
+        plt.savefig(outfile, bbox_inches="tight")
+        plt.close()
     else:
         plt.show()

@@ -1,7 +1,6 @@
-# setup_dirs.py
 import os
 
-lista_diretorios = [
+directories_list = [
     "clutter_channel_estimates",
     "plots_1_ClutterChannels",
     "plots_2_SupervisedBaseline",
@@ -15,9 +14,8 @@ lista_diretorios = [
     "evaluation_charts"
 ]
 
-for diretorio in lista_diretorios:
+for directory in directories_list
     try:
-        os.makedirs(diretorio, exist_ok=True)
-        print(f"Diretório '{diretorio}' verificado/criado.")
+        os.makedirs(directory, exist_ok=True)
     except Exception as e:
-        print(f"Erro ao criar o diretório '{diretorio}': {e}")
+        print(f"Error creating directory '{directory}': {e}")

@@ -192,55 +192,57 @@ class ChartPlotCallback(tf.keras.callbacks.Callback):
         plt.close('all') 
 
 def train_model(training_data, augmented = True, plot_prefix_cb="train_chart", num_epochs=100):
-    STEPS_PER_EPOCH = 200 
+    STEPS_PER_EPOCH = 200
+    EPOCHS = 10
     LEARNING_RATE_INITIAL = 1e-2
     LEARNING_RATE_FINAL = 1e-5
-    FIXED_BATCH_SIZE = 256 # Conforme notebook 6_ChannelCharting.ipynb do GitHub
+    BATCH_SIZES = [64, 128, 256, 512, 1024, 2048, 4096]
     
     training_features = training_data["cluster_features"]
     sample_count = training_features.shape[0]
 
-    if sample_count == 0: print("ERROR: No training features. Cannot train."); return None
-
     fcf_model = neural_network_utils.construct_model(input_shape = FeatureEngineering.FEATURE_SHAPE, name = "ChannelChartingModel")
 
-    input_A = tf.keras.layers.Input(shape = (), dtype = tf.int64) 
-    input_B = tf.keras.layers.Input(shape = (), dtype = tf.int64) 
+    input_A = tf.keras.layers.Input(shape = (), dtype = tf.int64)
+    input_B = tf.keras.layers.Input(shape = (), dtype = tf.int64)
     featprov = neural_network_utils.FeatureProviderLayer(dtype = tf.int64)
     featprov.set_features(training_features)
     csi_A = featprov(input_A)
     csi_B = featprov(input_B)
-    embedding_A = fcf_model(csi_A) 
+    embedding_A = fcf_model(csi_A)
     embedding_B = fcf_model(csi_B)
     output = tf.keras.layers.concatenate([embedding_A, embedding_B], axis = 1)
     siamese_model = tf.keras.models.Model([input_A, input_B], output, name = "SiameseNeuralNetwork")
 
     margin_val = 0.01 # Valor fixo do GitHub para dissimilarity_margin
 
-    loss_fn = ChannelChartingLoss( 
+    loss = ChannelChartingLoss(
         classical_weight = 0.05 if augmented else 0.0,
-        aoa_angles = training_data.get("cluster_aoa_angles", None) if augmented else None,
-        aoa_powers = training_data.get("cluster_aoa_powers", None) if augmented else None,
+        aoa_angles = training_data["cluster_aoa_angles"],
+        aoa_powers = training_data["cluster_aoa_powers"],
         height = training_data["mean_height"],
         dissimilarity_matrix = training_data["dissimilarity_matrix"],
-        dissimilarity_margin = margin_val,
+        dissimilarity_margin = np.quantile(training_data["dissimilarity_matrix"], 0.01),
     )
 
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
                     initial_learning_rate = LEARNING_RATE_INITIAL,
-                    decay_steps = num_epochs * STEPS_PER_EPOCH, 
-                    decay_rate = LEARNING_RATE_FINAL / LEARNING_RATE_INITIAL if LEARNING_RATE_INITIAL > 0 else 0.0,
+                    decay_steps = EPOCHS * STEPS_PER_EPOCH,
+                    decay_rate = LEARNING_RATE_FINAL / LEARNING_RATE_INITIAL,
                     staircase = False)
     
-    siamese_model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = lr_schedule), loss = loss_fn)
+    siamese_model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = lr_schedule), loss = loss)
 
     def random_index_batch_generator():
+         batch_count = 0
         while True:
-            indices_A = np.random.randint(sample_count, size = FIXED_BATCH_SIZE)
-            indices_B = np.random.randint(sample_count, size = FIXED_BATCH_SIZE)
-            
-            yield (indices_A.astype(np.int64), indices_B.astype(np.int64)), \
-                  tf.stack([indices_A.astype(np.int64), indices_B.astype(np.int64)], axis = 1)
+            #print(batch_count, int(np.floor(batch_count / (TRAINING_BATCHES + 1) * len(BATCH_SIZES))))
+            batch_size = BATCH_SIZES[min(int(np.floor(batch_count / (EPOCHS * STEPS_PER_EPOCH + 1) * len(BATCH_SIZES))), len(BATCH_SIZES) - 1)]
+            batch_count = batch_count + 1
+            #print("batch_size =", batch_size)
+            indices_A = np.random.randint(sample_count, size = 256)
+            indices_B = np.random.randint(sample_count, size = 256)
+            yield (indices_A, indices_B), tf.stack([indices_A, indices_B], axis = 1)
 
     training_dataset_tf = tf.data.Dataset.from_generator(random_index_batch_generator,
         output_signature = (

@@ -136,4 +136,4 @@ for filename, clutter_acquisitions_by_tx in clutter_acquisitions_by_dataset.item
                      title=plot_title, 
                      outfile_path=full_output_plot_path)
 
-print(f"Plots saved in: {os.path.abspath(plots_dir)}")
+print(f"Plots saved to: {os.path.abspath(plots_dir)}")

@@ -294,7 +294,7 @@ if __name__ == '__main__':
 
         if errors.size > 0: # Condição original
             # --- MODIFICAÇÃO: Salvar plot CCEvaluation.plot_error_ecdf ---
-            ecdf_filename = f"triangulation_ecdf_{suptitle_text_eval}.pdf" # ou .png
+            ecdf_filename = f"triangulation_ecdf_{suptitle_text_eval}.jpg"
             full_ecdf_path = os.path.join(plots_output_dir, ecdf_filename)
             CCEvaluation.plot_error_ecdf(estimates_for_eval, groundtruth_for_eval, outfile=full_ecdf_path) # outfile adicionado
             # print(f"ECDF plot salvo em: {full_ecdf_path}") # Opcional

@@ -1,2 +1,13 @@
 espargos-0007/
 __pycache__/
+clutter_channel_estimates/
+aoa_estimates/
+triangulation_estimates/
+dissimilarity_matrices/
+epoch_charts/
+evaluation_charts/
+plots_1_ClutterChannels/
+plots_2_SupervisedBaseline/
+plots_3_AoA_Estimation/
+plots_4_Triangulation/
+plots_5_DissimilarityMatrix/

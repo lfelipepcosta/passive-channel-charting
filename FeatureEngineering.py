@@ -53,9 +53,9 @@ FEATURE_SHAPE = (espargos_0007.TX_COUNT, espargos_0007.ARRAY_COUNT, TAP_STOP - T
 
 
 def feature_engineering_worker(todo_queue, output_queue):
-"""
-A worker process that takes a CSI processing task, computes features, and returns the result.
-"""
+    """
+    A worker process that takes a CSI processing task, computes features, and returns the result.
+    """
 
     while True:
         task_details = todo_queue.get()        # Get a task from the queue. This will block until a task is available
@@ -77,9 +77,9 @@ A worker process that takes a CSI processing task, computes features, and return
 
 
 def precompute_features(all_datasets):
-"""
-Orchestrates the feature engineering process using multiple worker processes.
-"""
+    """
+    Orchestrates the feature engineering process using multiple worker processes.
+    """
     # Create queues for communication between the main process and workers
     todo_queue = mp.Queue()
     output_queue = mp.Queue()

@@ -44,9 +44,9 @@ def get_unitary_rootmusic_estimator(chunksize = 32, shed_coeff_ratio = 0):  # `c
     Q = np.asmatrix(np.block([[I, 1.0j * I], [J, -1.0j * J]]) / np.sqrt(2))
     
     def unitary_rootmusic(R):
-"""
-The actual MUSIC estimator function.
-"""
+        """
+        The actual MUSIC estimator function.
+        """
         assert(len(R) == chunksize)
         # Apply the unitary transformation to the covariance matrix R
         C = np.real(Q.H @ R @ Q)
@@ -144,7 +144,7 @@ for dataset in tqdm(test_set_robot + test_set_human):
     # Calculate the estimation error
     dataset['cluster_aoa_estimation_errors'] = dataset['cluster_aoa_angles'] - dataset['cluster_groundtruth_aoas']
 
-    Generate plots for each receiver array
+    # Generate plots for each receiver array
     norm = mcolors.Normalize(vmin=-45, vmax=45)
     for b in range(dataset["cluster_aoa_angles"].shape[1]):
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))

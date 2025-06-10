@@ -12,9 +12,9 @@ matplotlib.use('Agg')       # Use a non-interactive backend for saving plots to 
 
 
 def combine_datasets(datasets):
-"""
-Concatenates features and positions from a list of dataset dictionaries.
-"""
+    """
+    Concatenates features and positions from a list of dataset dictionaries.
+    """
     all_cluster_features = []
     all_cluster_positions = []
 
@@ -31,9 +31,9 @@ Concatenates features and positions from a list of dataset dictionaries.
 
 
 def to_supervised_dataset(datasets):
-"""
-Converts a list of dataset dictionaries into a single, combined tf.data.Dataset by creating a dataset for each and concatenating them in a loop.
-"""
+    """
+    Converts a list of dataset dictionaries into a single, combined tf.data.Dataset by creating a dataset for each and concatenating them in a loop.
+    """
     # Create an initial dataset from the first file's data
     supervised_dataset = tf.data.Dataset.from_tensor_slices((datasets[0]["cluster_features"], datasets[0]["cluster_positions"][:,:2]))
     # Loop through the rest of the datasets and concatenate them
@@ -44,9 +44,9 @@ Converts a list of dataset dictionaries into a single, combined tf.data.Dataset 
 
 
 def train_model(training_features, training_labels):
-"""
-Constructs, compiles, and trains the supervised neural network model.
-"""
+    """
+    Constructs, compiles, and trains the supervised neural network model.
+    """
     # Training hyperparameters
     TRAINING_BATCHES = 4000
     BATCH_SIZES = [64, 128, 256, 512, 1024, 2048, 4096]
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     test_set_human_supervised = to_supervised_dataset(valid_test_human_sets)
 
     # Train the Supervised Model
-     if training_set_robot_features.shape[0] == 0:
+    if training_set_robot_features.shape[0] == 0:
         print("ERROR: Training set is empty. Cannot train model.")
         exit()
     print("Starting model training...")
@@ -185,7 +185,6 @@ if __name__ == '__main__':
             CCEvaluation.plot_colorized(training_set_robot_predictions, training_set_robot_groundtruth_positions, 
                                         suptitle=suptitle, title=title, 
                                         show=False, outfile=full_plot_path_train_robot)
-            print(f"Plot salvo em: {full_plot_path_train_robot}")
         else:
             print("WARN: training_set_robot_groundtruth_positions está vazio. Não é possível calcular métricas de localização.")
 
@@ -206,7 +205,6 @@ if __name__ == '__main__':
             CCEvaluation.plot_colorized(test_set_robot_predictions, test_set_robot_groundtruth_positions, 
                                         suptitle=suptitle, title=title, 
                                         show=False, outfile=full_plot_path_test_robot_scatter)
-            print(f"ECDF plot saved to: {full_plot_path_test_robot_scatter}")
             # Calculate the full suite of metrics for the final report
             metrics = CCEvaluation.compute_all_performance_metrics(test_set_robot_predictions, test_set_robot_groundtruth_positions)
             
@@ -214,7 +212,6 @@ if __name__ == '__main__':
             full_ecdf_path_test_robot = os.path.join(plots_output_dir, ecdf_filename_test_robot)
             CCEvaluation.plot_error_ecdf(test_set_robot_predictions, test_set_robot_groundtruth_positions, 
                                           outfile=full_ecdf_path_test_robot)
-            print(f"ECDF plot salvo em: {full_ecdf_path_test_robot}")
             # Print the final metrics report
             for metric_name, metric_value in metrics.items():
                 print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
@@ -231,22 +228,18 @@ if __name__ == '__main__':
             errorvectors, errors, mae, cep = CCEvaluation.compute_localization_metrics(test_set_human_predictions, test_set_human_groundtruth_positions)
             suptitle = f"Evaluated on Test Set (Human)"
             title = f"Supervised: MAE = {mae:.3f}m, CEP = {cep:.3f}m"
-            # --- MODIFICAÇÃO: Salvar plot em vez de mostrar ---
             plot_filename_test_human_scatter = f"supervised_test_human_scatter_mae{mae:.3f}_cep{cep:.3f}.png"
             full_plot_path_test_human_scatter = os.path.join(plots_output_dir, plot_filename_test_human_scatter)
             CCEvaluation.plot_colorized(test_set_human_predictions, test_set_human_groundtruth_positions, 
                                         suptitle=suptitle, title=title, 
-                                        show=False, outfile=full_plot_path_test_human_scatter) # show=False, outfile adicionado
+                                        show=False, outfile=full_plot_path_test_human_scatter)
             print(f"Plot salvo em: {full_plot_path_test_human_scatter}")
             
             metrics = CCEvaluation.compute_all_performance_metrics(test_set_human_predictions, test_set_human_groundtruth_positions)
-            # ECDF para o conjunto humano (se desejado, o original não plotava ECDF para humanos)
             ecdf_filename_test_human = "supervised_test_human_ecdf.jpg"
             full_ecdf_path_test_human = os.path.join(plots_output_dir, ecdf_filename_test_human)
             CCEvaluation.plot_error_ecdf(test_set_human_predictions, test_set_human_groundtruth_positions, 
-                                          outfile=full_ecdf_path_test_human) # outfile adicionado
-            print(f"ECDF plot salvo em: {full_ecdf_path_test_human}")
-            # --- FIM MODIFICAÇÃO ---
+                                          outfile=full_ecdf_path_test_human)
             for metric_name, metric_value in metrics.items():
                 print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
         else:

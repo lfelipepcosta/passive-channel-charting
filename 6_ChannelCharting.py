@@ -220,7 +220,7 @@ if __name__ == '__main__':
     test_set_human_predictions = fcf_model.predict(human_test_data["cluster_features"])
     test_set_human_predictions_transformed = affine_transform_channel_chart(human_test_data["cluster_positions"], test_set_human_predictions)
     metrics = CCEvaluation.compute_all_performance_metrics(test_set_human_predictions_transformed, human_test_data["cluster_positions"])
-    CCEvaluation.plot_colorized(test_set_human_predictions_transformed, human_test_data["cluster_positions"], suptitle="PCC on Test Set (Human)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(plots_output_dir, "pcc_unaug_human_scatter.png"))
+    CCEvaluation.plot_colorized(test_set_human_predictions_transformed, human_test_data["cluster_positions"], suptitle="PCC on Test Set (Human)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(plots_output_dir, "pcc_unaug_human_scatter.jpg"))
     CCEvaluation.plot_error_ecdf(test_set_human_predictions_transformed, human_test_data["cluster_positions"], outfile=os.path.join(plots_output_dir, "pcc_unaug_human_ecdf.jpg"))
     for metric_name, metric_value in metrics.items():
         print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")

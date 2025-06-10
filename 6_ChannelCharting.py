@@ -18,9 +18,16 @@ def aoa_power_to_kappa(aoa_power_tensor):
     aoa_power_tensor_float = tf.cast(aoa_power_tensor, dtype=tf.float32)
     return 5.0 * tf.pow(aoa_power_tensor_float, 6.0)
 
+# Aproximação de Bessel I0 (versão do seu script, que é robusta)
 def bessel_i0_approx(x):
-	# See Eq. (10) in https://iopscience.iop.org/article/10.1088/1742-6596/1043/1/012003/pdf
-	return tf.math.cosh(x) / (1 + x**2 / 4)**(1/4) * (1 + 0.24273 * x**2) / (1 + 0.43023 * x**2)
+    x_f32 = tf.cast(x, tf.float32)
+    x_f32_safe = tf.maximum(x_f32, 0.0) 
+    term1_den = tf.maximum((1.0 + x_f32_safe**2 / 4.0), 1e-9) 
+    term1 = tf.math.cosh(x_f32_safe) / tf.pow(term1_den, 0.25)
+    term2_num = 1.0 + 0.24273 * x_f32_safe**2
+    term2_den = tf.maximum(1.0 + 0.43023 * x_f32_safe**2, 1e-9)
+    term2 = term2_num / term2_den
+    return term1 * term2
 
 class ChannelChartingLoss(tf.keras.losses.Loss):
     def __init__(self, classical_weight, aoa_angles, aoa_powers, height, dissimilarity_matrix, dissimilarity_margin = 1.0, name = "CCLoss"):
@@ -61,34 +68,32 @@ class ChannelChartingLoss(tf.keras.losses.Loss):
         return tf.math.reduce_prod(aoa_likelihoods, axis = -1)
 
     def siamese(self, pos_A, pos_B, dissimilarities):
-        distances_pred = tf.math.sqrt(tf.math.reduce_sum(tf.square(pos_A - pos_B), axis = 1))
-        return tf.reduce_mean(tf.square(distances_pred - dissimilarities) / (dissimilarities + self.dissimilarity_margin))
+        distances_pred = tf.math.sqrt(tf.math.reduce_sum(tf.square(pos_A - pos_B), axis = 1) + 1e-9)
+        return tf.reduce_mean(tf.square(distances_pred - dissimilarities) / (dissimilarities + self.dissimilarity_margin + 1e-9))
 
     def call(self, y_true, y_pred):
-        # This is an ugly workaround, the loss function always gets y_pred as float, convert back to integer for index
-        # This works as long as CSI tensor is not absolutely huge (16M+ entries), which can be assumed.
-        index_A = tf.cast(y_true[:,0], tf.int32)
-        index_B = tf.cast(y_true[:,1], tf.int32)
-
+        index_A = tf.cast(y_true[:,0], tf.int64)
+        index_B = tf.cast(y_true[:,1], tf.int64)
         pos_A, pos_B = (y_pred[:,:2], y_pred[:,2:])
+        
+        indices_for_gather = tf.stack([index_A, index_B], axis = -1)
+        dissimilarities = tf.gather_nd(self.dissimilarity_matrix_tensor, indices_for_gather)
+        siamese_loss_val = self.siamese(pos_A, pos_B, dissimilarities)
 
-        # Siamese loss
-        dissimilarities = tf.gather_nd(self.dissimilarity_matrix_tensor, tf.transpose([index_A, index_B]))
-        siamese_loss = self.siamese(pos_A, pos_B, dissimilarities)
+        total_loss = (1.0 - self.classical_weight) * siamese_loss_val
 
-        # Classical loss
-        aoa_A = tf.gather(self.estimated_aoas_tensor, index_A)
-        aoa_B = tf.gather(self.estimated_aoas_tensor, index_B)
-        aoa_power_A = tf.gather(self.aoa_powers_tensor, index_A)
-        aoa_power_B = tf.gather(self.aoa_powers_tensor, index_B)
+        if self.use_classical_loss:
+            aoa_A_tensor = tf.gather(self.estimated_aoas_tensor, index_A) 
+            aoa_B_tensor = tf.gather(self.estimated_aoas_tensor, index_B) 
+            aoa_power_A_tensor = tf.gather(self.aoa_powers_tensor, index_A)
+            aoa_power_B_tensor = tf.gather(self.aoa_powers_tensor, index_B)
 
-        classical_loss = -tf.reduce_sum(
-            self.classical(pos_A, aoa_A, aoa_power_A) +
-            self.classical(pos_B, aoa_B, aoa_power_B)
-        )
-
-        # Combination
-        return self.classical_weight * classical_loss + (1 - self.classical_weight) * siamese_loss
+            classical_loss_A = self.classical(pos_A, aoa_A_tensor, aoa_power_A_tensor)
+            classical_loss_B = self.classical(pos_B, aoa_B_tensor, aoa_power_B_tensor)
+            
+            neg_sum_classical_likelihoods = -tf.reduce_sum(classical_loss_A + classical_loss_B)
+            total_loss += self.classical_weight * neg_sum_classical_likelihoods
+        return total_loss
 
 def combine_datasets(datasets_list_of_dicts, for_training = False):
     combined = dict()
@@ -186,68 +191,68 @@ class ChartPlotCallback(tf.keras.callbacks.Callback):
             print(f"  Callback Epoch {epoch+1}: No valid points for evaluation. Skipping plot.")
         plt.close('all') 
 
-def train_model(training_data, augmented = True):
-    # Training Hyperparameters
-    STEPS_PER_EPOCH = 200
-    EPOCHS = 10
+def train_model(training_data, augmented = True, plot_prefix_cb="train_chart", num_epochs=100):
+    STEPS_PER_EPOCH = 200 
     LEARNING_RATE_INITIAL = 1e-2
     LEARNING_RATE_FINAL = 1e-5
-    BATCH_SIZES = [64, 128, 256, 512, 1024, 2048, 4096]
+    FIXED_BATCH_SIZE = 256 # Conforme notebook 6_ChannelCharting.ipynb do GitHub
     
     training_features = training_data["cluster_features"]
     sample_count = training_features.shape[0]
 
-    # Step 1: Construct forward charting function (FCF) regression model
+    if sample_count == 0: print("ERROR: No training features. Cannot train."); return None
+
     fcf_model = neural_network_utils.construct_model(input_shape = FeatureEngineering.FEATURE_SHAPE, name = "ChannelChartingModel")
 
-    # Step 2: Embed FCF model into Siamese training model that provides features as neural network inputs
-    input_A = tf.keras.layers.Input(shape = (), dtype = tf.int64)
-    input_B = tf.keras.layers.Input(shape = (), dtype = tf.int64)
+    input_A = tf.keras.layers.Input(shape = (), dtype = tf.int64) 
+    input_B = tf.keras.layers.Input(shape = (), dtype = tf.int64) 
     featprov = neural_network_utils.FeatureProviderLayer(dtype = tf.int64)
     featprov.set_features(training_features)
     csi_A = featprov(input_A)
     csi_B = featprov(input_B)
-    embedding_A = fcf_model(csi_A)
+    embedding_A = fcf_model(csi_A) 
     embedding_B = fcf_model(csi_B)
     output = tf.keras.layers.concatenate([embedding_A, embedding_B], axis = 1)
     siamese_model = tf.keras.models.Model([input_A, input_B], output, name = "SiameseNeuralNetwork")
 
-    loss = ChannelChartingLoss(
+    margin_val = 0.01 # Valor fixo do GitHub para dissimilarity_margin
+
+    loss_fn = ChannelChartingLoss( 
         classical_weight = 0.05 if augmented else 0.0,
-        aoa_angles = training_data["cluster_aoa_angles"],
-        aoa_powers = training_data["cluster_aoa_powers"],
+        aoa_angles = training_data.get("cluster_aoa_angles", None) if augmented else None,
+        aoa_powers = training_data.get("cluster_aoa_powers", None) if augmented else None,
         height = training_data["mean_height"],
         dissimilarity_matrix = training_data["dissimilarity_matrix"],
-        dissimilarity_margin = np.quantile(training_data["dissimilarity_matrix"], 0.01),
+        dissimilarity_margin = margin_val,
     )
 
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
                     initial_learning_rate = LEARNING_RATE_INITIAL,
-                    decay_steps = EPOCHS * STEPS_PER_EPOCH,
-                    decay_rate = LEARNING_RATE_FINAL / LEARNING_RATE_INITIAL,
+                    decay_steps = num_epochs * STEPS_PER_EPOCH, 
+                    decay_rate = LEARNING_RATE_FINAL / LEARNING_RATE_INITIAL if LEARNING_RATE_INITIAL > 0 else 0.0,
                     staircase = False)
     
-    siamese_model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = lr_schedule), loss = loss)
+    siamese_model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = lr_schedule), loss = loss_fn)
 
-    # Step 3: Actually train model
     def random_index_batch_generator():
-        batch_count = 0
         while True:
-            #print(batch_count, int(np.floor(batch_count / (TRAINING_BATCHES + 1) * len(BATCH_SIZES))))
-            batch_size = BATCH_SIZES[min(int(np.floor(batch_count / (EPOCHS * STEPS_PER_EPOCH + 1) * len(BATCH_SIZES))), len(BATCH_SIZES) - 1)]
-            batch_count = batch_count + 1
-            #print("batch_size =", batch_size)
-            indices_A = np.random.randint(sample_count, size = 256)
-            indices_B = np.random.randint(sample_count, size = 256)
-            yield (indices_A, indices_B), tf.stack([indices_A, indices_B], axis = 1)
+            indices_A = np.random.randint(sample_count, size = FIXED_BATCH_SIZE)
+            indices_B = np.random.randint(sample_count, size = FIXED_BATCH_SIZE)
+            
+            yield (indices_A.astype(np.int64), indices_B.astype(np.int64)), \
+                  tf.stack([indices_A.astype(np.int64), indices_B.astype(np.int64)], axis = 1)
 
-    training_dataset = tf.data.Dataset.from_generator(random_index_batch_generator,
-        output_signature = ((tf.TensorSpec(shape = (None,), dtype = tf.int32), tf.TensorSpec(shape = (None,), dtype = tf.int32)),
-        tf.TensorSpec(shape = (None, 2), dtype = tf.int32)))
-
-    plot_callback = ChartPlotCallback(featprov, training_data["cluster_positions"], fcf_model, augmented = augmented)
-    siamese_model.fit(training_dataset, steps_per_epoch = STEPS_PER_EPOCH, epochs = EPOCHS, callbacks = [plot_callback])
-
+    training_dataset_tf = tf.data.Dataset.from_generator(random_index_batch_generator,
+        output_signature = (
+            (tf.TensorSpec(shape = (None,), dtype = tf.int64), tf.TensorSpec(shape = (None,), dtype = tf.int64)), 
+            tf.TensorSpec(shape = (None, 2), dtype = tf.int64)  
+        )).prefetch(tf.data.AUTOTUNE) 
+    
+    plot_callback = ChartPlotCallback(featprov, training_data["cluster_positions"], fcf_model, augmented = augmented, plot_prefix=plot_prefix_cb)
+    
+    print(f"Starting training for {'augmented' if augmented else 'un-augmented'} model ({num_epochs} epochs, {STEPS_PER_EPOCH} steps/epoch, batch_size={FIXED_BATCH_SIZE})...")
+    siamese_model.fit(training_dataset_tf, steps_per_epoch = STEPS_PER_EPOCH, epochs = num_epochs, callbacks = [plot_callback])
+    print(f"Training finished for {'augmented' if augmented else 'un-augmented'} model.")
     return fcf_model
 
 if __name__ == '__main__':
@@ -297,7 +302,7 @@ if __name__ == '__main__':
     human_test_data = combine_datasets(test_set_human, for_training = False)
     print("Datasets combined.")
 
-    EPOCHS_FOR_TRAINING = 10
+    EPOCHS_FOR_TRAINING = 100
 
     print("\n--- Training Un-augmented FCF Model (PCC) ---")
     fcf_model = train_model(robot_training_data, augmented = False, plot_prefix_cb="pcc_unaugmented_train_chart", num_epochs=EPOCHS_FOR_TRAINING)
@@ -305,28 +310,36 @@ if __name__ == '__main__':
     if fcf_model:
         eval_plot_dir = "evaluation_charts"
         print(f"\n--- Evaluating Un-augmented FCF Model on Robot Test Set (Plots saved to {eval_plot_dir}) ---")
-        test_set_robot_predictions = fcf_model.predict(robot_test_data["cluster_features"])
-        test_set_robot_predictions_transformed = affine_transform_channel_chart(robot_test_data["cluster_positions"], test_set_robot_predictions)
-        errorvectors, errors, mae, cep = CCEvaluation.compute_localization_metrics(test_set_robot_predictions_transformed, robot_test_data["cluster_positions"])
-        suptitle = f"PCC Evaluated on Test Set (Robot)"
+        test_set_robot_predictions_relative = fcf_model.predict(robot_test_data["cluster_features"], verbose=0)
+        test_set_robot_predictions_transformed_relative = affine_transform_channel_chart(robot_test_data["cluster_positions"], test_set_robot_predictions_relative)
+        test_set_robot_predictions_final = test_set_robot_predictions_transformed_relative + espargos_0007.centroid[np.newaxis, :2]
+        
+        errorvectors, errors, mae, cep = CCEvaluation.compute_localization_metrics(test_set_robot_predictions_final, robot_test_data["cluster_positions"])
+        suptitle = f"PCC (Un-augmented) Evaluated on Test Set (Robot) - {EPOCHS_FOR_TRAINING} Epochs"
         title = f"Unsupervised: MAE = {mae:.3f}m, CEP = {cep:.3f}m"
-        CCEvaluation.plot_colorized(test_set_robot_predictions_transformed, robot_test_data["cluster_positions"], suptitle = suptitle, title = title)
-        metrics = CCEvaluation.compute_all_performance_metrics(test_set_robot_predictions_transformed, robot_test_data["cluster_positions"])
-        CCEvaluation.plot_error_ecdf(test_set_robot_predictions_transformed, robot_test_data["cluster_positions"])
-        for metric_name, metric_value in metrics.items():
-            print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
+        CCEvaluation.plot_colorized(test_set_robot_predictions_final, robot_test_data["cluster_positions"], suptitle=suptitle, title=title, show=False, outfile=os.path.join(eval_plot_dir, f"pcc_unaug_eval_robot_scatter_{EPOCHS_FOR_TRAINING}e.png"))
+        plt.close('all') 
+        metrics = CCEvaluation.compute_all_performance_metrics(test_set_robot_predictions_final, robot_test_data["cluster_positions"])
+        CCEvaluation.plot_error_ecdf(test_set_robot_predictions_final, robot_test_data["cluster_positions"], outfile=os.path.join(eval_plot_dir, f"pcc_unaug_eval_robot_ecdf_{EPOCHS_FOR_TRAINING}e.pdf"))
+        plt.close('all')
+        print(f"Metrics for Un-augmented PCC on Robot Test Set ({EPOCHS_FOR_TRAINING} Epochs):")
+        for metric_name, metric_value in metrics.items(): print(f"  {metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
 
         print(f"\n--- Evaluating Un-augmented FCF Model on Human Test Set (Plots saved to {eval_plot_dir}) ---")
-        test_set_human_predictions = fcf_model.predict(human_test_data["cluster_features"]) + espargos_0007.centroid[:2]
-        test_set_human_predictions_transformed = affine_transform_channel_chart(human_test_data["cluster_positions"], test_set_human_predictions)
-        errorvectors, errors, mae, cep = CCEvaluation.compute_localization_metrics(test_set_human_predictions_transformed, human_test_data["cluster_positions"])
-        suptitle = f"PCC Evaluated on Test Set (Human)"
+        test_set_human_predictions_relative = fcf_model.predict(human_test_data["cluster_features"], verbose=0)
+        test_set_human_predictions_transformed_relative = affine_transform_channel_chart(human_test_data["cluster_positions"], test_set_human_predictions_relative)
+        test_set_human_predictions_final = test_set_human_predictions_transformed_relative + espargos_0007.centroid[np.newaxis, :2]
+        
+        errorvectors, errors, mae, cep = CCEvaluation.compute_localization_metrics(test_set_human_predictions_final, human_test_data["cluster_positions"])
+        suptitle = f"PCC (Un-augmented) Evaluated on Test Set (Human) - {EPOCHS_FOR_TRAINING} Epochs"
         title = f"Unsupervised: MAE = {mae:.3f}m, CEP = {cep:.3f}m"
-        CCEvaluation.plot_colorized(test_set_human_predictions, human_test_data["cluster_positions"], suptitle = suptitle, title = title)
-        metrics = CCEvaluation.compute_all_performance_metrics(test_set_human_predictions_transformed, human_test_data["cluster_positions"])
-        CCEvaluation.plot_error_ecdf(test_set_human_predictions_transformed, human_test_data["cluster_positions"])
-        for metric_name, metric_value in metrics.items():
-            print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
+        CCEvaluation.plot_colorized(test_set_human_predictions_final, human_test_data["cluster_positions"], suptitle=suptitle, title=title, show=False, outfile=os.path.join(eval_plot_dir, f"pcc_unaug_eval_human_scatter_{EPOCHS_FOR_TRAINING}e.png"))
+        plt.close('all')
+        metrics = CCEvaluation.compute_all_performance_metrics(test_set_human_predictions_final, human_test_data["cluster_positions"])
+        CCEvaluation.plot_error_ecdf(test_set_human_predictions_final, human_test_data["cluster_positions"], outfile=os.path.join(eval_plot_dir, f"pcc_unaug_eval_human_ecdf_{EPOCHS_FOR_TRAINING}e.pdf"))
+        plt.close('all')
+        print(f"Metrics for Un-augmented PCC on Human Test Set ({EPOCHS_FOR_TRAINING} Epochs):")
+        for metric_name, metric_value in metrics.items(): print(f"  {metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
     else:
         print("Skipping evaluation for un-augmented model as training failed.")
 
@@ -355,7 +368,7 @@ if __name__ == '__main__':
         CCEvaluation.plot_colorized(test_set_robot_predictions_abs_aug, robot_test_data["cluster_positions"], suptitle=suptitle, title=title, show=False, outfile=os.path.join(eval_plot_dir, f"pcc_aug_eval_robot_scatter_{EPOCHS_FOR_TRAINING}e.png"))
         plt.close('all')
         metrics = CCEvaluation.compute_all_performance_metrics(test_set_robot_predictions_abs_aug, robot_test_data["cluster_positions"])
-        CCEvaluation.plot_error_ecdf(test_set_robot_predictions_abs_aug, robot_test_data["cluster_positions"], outfile=os.path.join(eval_plot_dir, f"pcc_aug_eval_robot_ecdf_{EPOCHS_FOR_TRAINING}e.jpg"))
+        CCEvaluation.plot_error_ecdf(test_set_robot_predictions_abs_aug, robot_test_data["cluster_positions"], outfile=os.path.join(eval_plot_dir, f"pcc_aug_eval_robot_ecdf_{EPOCHS_FOR_TRAINING}e.pdf"))
         plt.close('all')
         print(f"Metrics for Augmented PCC on Robot Test Set ({EPOCHS_FOR_TRAINING} Epochs):")
         for metric_name, metric_value in metrics.items(): print(f"  {metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
@@ -370,7 +383,7 @@ if __name__ == '__main__':
         CCEvaluation.plot_colorized(test_set_human_predictions_abs_aug, human_test_data["cluster_positions"], suptitle=suptitle, title=title, show=False, outfile=os.path.join(eval_plot_dir, f"pcc_aug_eval_human_scatter_{EPOCHS_FOR_TRAINING}e.png"))
         plt.close('all')
         metrics = CCEvaluation.compute_all_performance_metrics(test_set_human_predictions_abs_aug, human_test_data["cluster_positions"])
-        CCEvaluation.plot_error_ecdf(test_set_human_predictions_abs_aug, human_test_data["cluster_positions"], outfile=os.path.join(eval_plot_dir, f"pcc_aug_eval_human_ecdf_{EPOCHS_FOR_TRAINING}e.jpg"))
+        CCEvaluation.plot_error_ecdf(test_set_human_predictions_abs_aug, human_test_data["cluster_positions"], outfile=os.path.join(eval_plot_dir, f"pcc_aug_eval_human_ecdf_{EPOCHS_FOR_TRAINING}e.pdf"))
         plt.close('all')
         print(f"Metrics for Augmented PCC on Human Test Set ({EPOCHS_FOR_TRAINING} Epochs):")
         for metric_name, metric_value in metrics.items(): print(f"  {metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")

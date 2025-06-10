@@ -10,8 +10,7 @@ directories_list = [
     "plots_4_Triangulation",
     "dissimilarity_matrices",
     "plots_5_DissimilarityMatrix",
-    "epoch_charts",
-    "evaluation_charts"
+    "epoch_charts"
 ]
 
 for directory in directories_list

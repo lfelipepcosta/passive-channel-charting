@@ -35,56 +35,81 @@ def get_likelihood_function(aoa_datapoint, aoa_power_datapoint):
     return likelihood_func
 
 def adp_dissimilarities_worker(todo_queue, output_queue, training_csi_reflected_data):
+    """
+    A worker process to compute cosine dissimilarities between CSI fingerprints.
+    """
     def adp_dissimilarities(index):
+        # Get the CSI vector for the current index 'i'
         h = training_csi_reflected_data[index,:,:,:]
+        # Get all vectors from index 'i' onwards for comparison
         w = training_csi_reflected_data[index:,:,:,:]
+        # Calculate the squared dot product between h and all w vectors
         dotproducts = np.abs(np.einsum("brm,lbrm->lb", np.conj(h), w, optimize = "optimal"))**2
+        # Calculate the squared norms
         h_norm_sq_per_array = np.real(np.einsum("brm,brm->b", h, np.conj(h), optimize = "optimal"))
         w_norm_sq_per_array = np.real(np.einsum("lbrm,lbrm->lb", w, np.conj(w), optimize = "optimal"))
+        # Calculate the product of norms
         norms = h_norm_sq_per_array[np.newaxis, :] * w_norm_sq_per_array
         norms_safe = norms + 1e-12 
+        # Compute the cosine dissimilarity: 1 - (|h.w|^2 / ||h||^2*||w||^2)
         dissimilarity_values = 1 - dotproducts / norms_safe
+        # Sum the dissimilarities over the receiver arrays
         return np.sum(dissimilarity_values, axis = (1))
 
+    # Main loop for the worker
     while True:
+        # Get a task (an index) from the queue
         index = todo_queue.get()
         if index == -1:
             break       
+         # Perform the calculation and put the result on the output queue
         output_queue.put((index, adp_dissimilarities(index)))
 
 def shortest_path_worker(todo_queue, output_queue, nbg_graph_data):
+    """
+    A worker process to compute the shortest path (geodesic distance) on a graph.
+    """
     while True:
+        # Get a task (an index) from the queue
         index = todo_queue.get()
         if index == -1:
             break       
+        # Use SciPy's Dijkstra algorithm to find the shortest path from the given index to all other nodes
         d = dijkstra(nbg_graph_data, directed = False, indices = index)
+        # Put the result (a row of the final geodesic matrix) on the output queue
         output_queue.put((index, d))
 
 
 def plot_dissimilarity_over_euclidean_distance(input_dissimilarity_matrix, input_distance_matrix, label=None):
+    """
+    A helper function to create a diagnostic plot comparing a dissimilarity metric against the true Euclidean distance.
+    """
+    # Downsample the data for a less cluttered plot
     nth_reduction = 10
-    
     dissimilarities_flat = input_dissimilarity_matrix[::nth_reduction, ::nth_reduction].flatten()
     distances_flat = input_distance_matrix[::nth_reduction, ::nth_reduction].flatten()
 
+    # Remove any non-finite values
     valid_mask = np.isfinite(dissimilarities_flat) & np.isfinite(distances_flat)
     dissimilarities_flat = dissimilarities_flat[valid_mask]
     distances_flat = distances_flat[valid_mask]
 
     if distances_flat.size == 0:
         print(f"WARN: No valid points to plot (plot_dissimilarity_over_euclidean_distance) for label: {label}")
-        return
+        return  # Cannot plot if there is no data
 
+    # Create bins for the x-axis (Euclidean distance)
     max_distance = np.max(distances_flat) 
     bins = np.linspace(0, max_distance, 200) 
     if len(bins) < 2: return
 
+     # For each distance bin, find all the corresponding dissimilarity values
     bin_indices = np.digitize(distances_flat, bins)
 
+    # Calculate statistics (median, 25th/75th percentiles) for each bin
     bin_medians = np.zeros(len(bins) - 1) 
     bin_25_perc = np.zeros(len(bins) - 1)
     bin_75_perc = np.zeros(len(bins) - 1)
-    
     for i in range(1, len(bins)): 
         bin_values = dissimilarities_flat[bin_indices == i]
         if bin_values.size > 0: 
@@ -92,24 +117,30 @@ def plot_dissimilarity_over_euclidean_distance(input_dissimilarity_matrix, input
         else:
             bin_25_perc[i-1], bin_medians[i-1], bin_75_perc[i-1] = np.nan, np.nan, np.nan
             
+    # Remove any bins that had no data
     valid_plot_mask = ~np.isnan(bin_medians)
     plot_bins = bins[:-1][valid_plot_mask]
     
+    # Plot the median line and a shaded area for the interquartile range
     if plot_bins.size > 0:
         plt.plot(plot_bins, bin_medians[valid_plot_mask], label=label)
         plt.fill_between(plot_bins, bin_25_perc[valid_plot_mask], bin_75_perc[valid_plot_mask], alpha=0.5)
 
 
 if __name__ == '__main__':
+    # Necessary for multiprocessing on Windows
     mp.freeze_support()
 
+    # Create directory for output plots
     plots_output_dir = "plots_5_DissimilarityMatrix" 
     os.makedirs(plots_output_dir, exist_ok=True)
 
+    # Load Data and Pre-computed Estimates
     print("Loading training dataset...")
     training_set = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
     print("Training dataset loaded.")
 
+    # Create output directories if they don't exist
     os.makedirs("clutter_channel_estimates", exist_ok=True)
     os.makedirs("triangulation_estimates", exist_ok=True)
     os.makedirs("dissimilarity_matrices", exist_ok=True)
@@ -117,6 +148,7 @@ if __name__ == '__main__':
     print("Loading precomputed estimates (clutter, triangulation)...")
     for dataset in training_set:
         dataset_name = os.path.basename(dataset['filename'])
+        # Load clutter signatures and triangulation estimates from previous scripts
         clutter_path = os.path.join("clutter_channel_estimates", dataset_name + ".npy")
         triangulation_path = os.path.join("triangulation_estimates", dataset_name + ".npy")
         if not os.path.exists(clutter_path) or not os.path.exists(triangulation_path):
@@ -126,25 +158,31 @@ if __name__ == '__main__':
         dataset['triangulation_position_estimates'] = np.load(triangulation_path)
     print("Precomputed estimates loaded.")
 
+    # Group raw data into temporal clusters
     print("Clustering datasets...")
     for dataset in training_set:
         cluster_utils.cluster_dataset(dataset)
     print("Datasets clustered.")
 
+    # Calculate "Reflected CSI" - a robust representation for each cluster
     print("Calculating reflected CSI...")
     training_csi_reflected = []
     for dataset in tqdm(training_set, desc="Processing Datasets for Reflected CSI"):
         for cluster in tqdm(dataset['clusters'], desc=f"  Clusters in {os.path.basename(dataset['filename'])}", leave=False):
+            # For each cluster, compute the spatial covariance matrix R
             antennas_per_array = espargos_0007.ROW_COUNT * espargos_0007.COL_COUNT
             R = np.zeros((espargos_0007.ARRAY_COUNT, antennas_per_array, antennas_per_array), dtype = np.complex64)
             num_tx_with_data = 0 
             for tx_idx, tx_csi_list_for_tx in enumerate(cluster['csi_freq_domain']):
                 if tx_csi_list_for_tx.shape[0] == 0: continue
                 num_tx_with_data += 1
+                # Clean the CSI data first
                 tx_csi_clutter_removed = CRAP.remove_clutter(tx_csi_list_for_tx, dataset['clutter_acquisitions'][tx_idx])
+                # Reshape to flatten per-array antenna and subcarrier dimensions
                 tx_csi_flat = np.reshape(tx_csi_clutter_removed, (
                     tx_csi_clutter_removed.shape[0], tx_csi_clutter_removed.shape[1],
                     tx_csi_clutter_removed.shape[2] * tx_csi_clutter_removed.shape[3], tx_csi_clutter_removed.shape[4]))
+                # Calculate the contribution to the covariance matrix from this transmitter
                 R_tx_contribution = np.einsum("dbms,dbns->bmn", tx_csi_flat, np.conj(tx_csi_flat)) / tx_csi_clutter_removed.shape[0]
                 R += R_tx_contribution 
             
@@ -153,9 +191,13 @@ if __name__ == '__main__':
             else: 
                 R_final = R 
 
+            # Calculate the contribution to the covariance matrix from this transmitter
             eig_val, eig_vec = np.linalg.eigh(R_final)
+            # Sort in descending order
             eig_val = eig_val[:,::-1]; eig_vec = eig_vec[:,:,::-1]
+            # Take the principal eigenvector (the one for the largest eigenvalue)
             principal_eigenvectors = np.sqrt(eig_val[:,0])[:,np.newaxis] * eig_vec[:,:,0] 
+            # This eigenvector is the "spatial signature" of the reflected signal
             training_csi_reflected.append(np.reshape(principal_eigenvectors, (espargos_0007.ARRAY_COUNT, espargos_0007.ROW_COUNT, espargos_0007.COL_COUNT)))
 
     training_csi_reflected = np.asarray(training_csi_reflected)
@@ -164,6 +206,7 @@ if __name__ == '__main__':
 
     if sample_count == 0: print("ERROR: No training_csi_reflected samples. Exiting."); exit()
 
+    # Calculate Initial Dissimilarity (Cosine-based) using Multiprocessing
     print("Calculating ADP dissimilarity matrix...")
     adp_dissimilarity_matrix = np.zeros((sample_count, sample_count), dtype = np.float32)
     todo_queue_adp = mp.Queue(); output_queue_adp = mp.Queue(); processes_adp = []
@@ -183,10 +226,13 @@ if __name__ == '__main__':
         results_collected_adp = 0
         while results_collected_adp < sample_count:
             try:
+                # Get a completed row from a worker
                 i, d_row_upper_triangle = output_queue_adp.get(timeout=300)
                 if d_row_upper_triangle is not None: 
+                    # Fill in the upper triangle of the matrix
                     end_slice = i + len(d_row_upper_triangle)
                     adp_dissimilarity_matrix[i, i:end_slice] = d_row_upper_triangle
+                    # The matrix is symmetric, so fill the lower triangle as well
                     adp_dissimilarity_matrix[i:end_slice, i] = d_row_upper_triangle
                     pbar_adp.update(2 * len(d_row_upper_triangle) -1)
                 results_collected_adp += 1
@@ -215,11 +261,14 @@ if __name__ == '__main__':
     plt.savefig(os.path.join(plots_output_dir, "adp_matrix_raw.png"))
     plt.close()
 
+    # Fuse with Time and Calculate Geodesic Dissimilarity
     training_groundtruth_positions = []
     for dataset in training_set:
         training_groundtruth_positions.append(dataset['cluster_positions'])
+    # Extract groundtruth positions and timestamps for all training clusters
     training_groundtruth_positions = np.concatenate(training_groundtruth_positions)
 
+    # Ensure all data arrays have the same length after potential filtering
     if training_groundtruth_positions.shape[0] != sample_count:
         print(f"WARN: Mismatch sample_count ({sample_count}) vs groundtruth_positions ({training_groundtruth_positions.shape[0]}). This may cause issues.")
         min_len = min(sample_count, training_groundtruth_positions.shape[0])
@@ -230,7 +279,7 @@ if __name__ == '__main__':
             training_groundtruth_positions = training_groundtruth_positions[:min_len]
         sample_count = min_len
 
-
+    # Ensure all data arrays have the same length after potential filtering
     groundtruth_distance_matrix = np.sqrt(np.sum((training_groundtruth_positions[np.newaxis,:,:2] - training_groundtruth_positions[:,np.newaxis,:2])**2, axis = -1))
     plt.figure() 
     plt.imshow(groundtruth_distance_matrix)
@@ -255,11 +304,14 @@ if __name__ == '__main__':
     training_timestamps = np.concatenate(training_timestamps)
     if training_timestamps.shape[0] != sample_count: training_timestamps = training_timestamps[:sample_count]
 
+    # Fuse the ADP dissimilarity with the time difference between clusters
     timestamp_dissimilarity_matrix = np.abs(np.subtract.outer(training_timestamps, training_timestamps))
     scaling_factor = 0.02
+    # The fused dissimilarity is the minimum of the ADP and the scaled time difference
     dissimilarity_matrix_fused = np.minimum(adp_dissimilarity_matrix_shifted, timestamp_dissimilarity_matrix * scaling_factor)
 
     print("Calculating geodesic dissimilarity matrix...")
+    # Build a k-Nearest-Neighbors graph from the fused dissimilarities
     n_neighbors = 20
     if sample_count < n_neighbors and sample_count > 0: n_neighbors = max(1, sample_count -1 if sample_count > 1 else 0)
     
@@ -271,6 +323,7 @@ if __name__ == '__main__':
         nbg = kneighbors_graph(nbrs, n_neighbors, metric="precomputed", mode="distance") 
     else: print("WARN: Skipping k-NN graph construction.")
 
+    # Calculate the shortest path between all pairs of nodes (geodesic distance) in parallel
     dissimilarity_matrix_geodesic = np.zeros((sample_count, sample_count), dtype = np.float32)
     if nbg is not None and hasattr(nbg, 'shape') and nbg.shape[0] > 0 :
         todo_queue_geo = mp.Queue(); output_queue_geo = mp.Queue(); processes_geo = []
@@ -300,10 +353,12 @@ if __name__ == '__main__':
 
     dissimilarity_matrix_geodesic_shifted = np.maximum(dissimilarity_matrix_geodesic - adp_thresh, 0.0) 
 
+    # Scale Dissimilarity to Meters and Save Final Matrix
     print("Computing scaling factor to meters...")
     scaling_factor_meters = 1.0 
     if sample_count > 1: 
         scaling_nth_reduction_orig = 10
+        # Use triangulation estimates to find a factor to scale the unitless dissimilarities to meters
         classical_positions_for_scaling = np.concatenate([dataset['triangulation_position_estimates'] for dataset in training_set])
 
         if classical_positions_for_scaling.shape[0] != sample_count:
@@ -354,9 +409,11 @@ if __name__ == '__main__':
     if not (np.isfinite(scaling_factor_meters) and scaling_factor_meters > 0):
         print(f"WARN: Computed scaling_factor_meters is invalid ({scaling_factor_meters}). Defaulting to 1.0.")
         scaling_factor_meters = 1.0
+    # Apply the scaling factor
     dissimilarity_matrix_geodesic_meters = dissimilarity_matrix_geodesic_shifted / scaling_factor_meters
     print(f"Scaling factor to meters: {scaling_factor_meters}")
 
+    # Save the final matrix to be used by the Channel Charting script
     output_filename = os.path.join("dissimilarity_matrices", espargos_0007.hash_dataset_names(training_set) + ".geodesic_meters.npy")
     np.save(output_filename, dissimilarity_matrix_geodesic_meters)
     print(f"Geodesic dissimilarity matrix (in meters) saved to: {output_filename}")

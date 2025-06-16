@@ -40,7 +40,7 @@ def aoa_power_to_kappa(aoa_power):
 
 def bessel_i0_approx(x):
     """Approximation of the modified Bessel function of the first kind of order 0."""
-	return tf.math.cosh(x) / (1 + x**2 / 4)**(1/4) * (1 + 0.24273 * x**2) / (1 + 0.43023 * x**2)
+    return tf.math.cosh(x) / (1 + x**2 / 4)**(1/4) * (1 + 0.24273 * x**2) / (1 + 0.43023 * x**2)
 
 class ChannelChartingLoss(tf.keras.losses.Loss):
     """

@@ -8,6 +8,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import time
 
 # Data Loading and Preprocessing
 
@@ -85,6 +86,7 @@ def get_unitary_rootmusic_estimator(chunksize = 32, shed_coeff_ratio = 0):  # `c
 umusic = get_unitary_rootmusic_estimator(4)
 
 # Main AoA Estimation Loop
+start_time = time.perf_counter()
 for dataset in tqdm(all_datasets):
     print(f"AoA estimation for dataset: {dataset['filename']}")
 
@@ -116,6 +118,10 @@ for dataset in tqdm(all_datasets):
     # Convert result lists to NumPy arrays
     dataset['cluster_aoa_angles'] = np.asarray(dataset['cluster_aoa_angles'])
     dataset['cluster_aoa_powers'] = np.asarray(dataset['cluster_aoa_powers'])
+
+end_time = time.perf_counter() # <<< MARCA O FIM
+elapsed_time_music = end_time - start_time
+print(f"\n--- Tempo de Execução Total (MUSIC): {elapsed_time_music:.2f} segundos ---\n")
 
 # Save AoA Estimation Results
 for dataset in all_datasets:

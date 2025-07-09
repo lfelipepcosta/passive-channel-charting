@@ -13,7 +13,7 @@ directories_list = [
     "epoch_charts"
 ]
 
-for directory in directories_list
+for directory in directories_list:
     try:
         os.makedirs(directory, exist_ok=True)
     except Exception as e:

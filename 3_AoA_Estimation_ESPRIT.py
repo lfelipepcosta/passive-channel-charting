@@ -47,16 +47,31 @@ for dataset in tqdm(all_datasets):
 
         for tx_csi in csi_by_transmitter_noclutter:
             R = R + np.einsum("dbrms,dbrns->bmn", tx_csi, np.conj(tx_csi)) / tx_csi.shape[0]
-
-        # ===================================================================
-        # INÍCIO DA LÓGICA DE SUBSTITUIÇÃO: MUSIC por ESPRIT
-        # ===================================================================
         
         # Parameters for our ESPRIT implementation
         num_antennas_per_array = espargos_0007.COL_COUNT  # This is 4
-        num_sources = 1                                  # We assume a single target
-        # We assume a standard half-wavelength spacing (d/λ = 0.5) for the antenna array.
-        normalized_spacing = 0.5
+        num_sources = 1                                   # We assume a single target
+
+        # Physical constants and parameters from the paper
+        SPEED_OF_LIGHT = 3e8  # m/s
+        CARRIER_FREQUENCY_HZ = 2.472e9  # 2.472 GHz, for Wi-Fi Channel 13
+        BANDWIDTH_HZ = 16.56e6          # ~16.56 MHz
+
+        # 1. Calculate the maximum operating frequency (f_max) of the signal
+        max_frequency = CARRIER_FREQUENCY_HZ + (BANDWIDTH_HZ / 2)
+
+        # 2. Calculate the minimum wavelength (λ_min) corresponding to f_max
+        min_wavelength = SPEED_OF_LIGHT / max_frequency
+
+        # 3. Define the physical spacing 'd' based on the half-wavelength rule (Nyquist criterion)
+        #    This is the most accurate value for 'd' based on the system parameters.
+        ANTENNA_SPACING_METERS = min_wavelength / 2.0
+
+        # 4. Calculate the wavelength (λ_c) for the carrier frequency, used for normalization
+        carrier_wavelength = SPEED_OF_LIGHT / CARRIER_FREQUENCY_HZ
+
+        # 5. Calculate the final normalized spacing (d/λ) to be used in the ESPRIT algorithm
+        normalized_spacing = ANTENNA_SPACING_METERS / carrier_wavelength
         
         esprit_angles_for_cluster = []
         esprit_powers_for_cluster = [] # ESPRIT doesn't naturally provide a power/confidence metric like Root-MUSIC.
@@ -66,7 +81,7 @@ for dataset in tqdm(all_datasets):
         for array_idx in range(R.shape[0]):
             covariance_matrix_for_array = R[array_idx]
             
-            # Call the ESPRIT function from our new module
+            # Call the ESPRIT function
             # It returns an array of angles; we take the first element since num_sources=1
             try:
                 angle_rad = ESPRIT.esprit_implementation(covariance_matrix_for_array, num_antennas_per_array, num_sources, normalized_spacing)[0]

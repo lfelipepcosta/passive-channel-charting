@@ -11,7 +11,6 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import time
 
-# <<< MUDANÇA 1: Importar o novo módulo SS_CAPON >>>
 import SS_CAPON
 
 print("--- Running AoA Estimation with SS-CAPON Implementation ---")
@@ -62,15 +61,12 @@ for dataset in tqdm(all_datasets):
             covariance_matrix_for_array = R[array_idx]
             
             try:
-                # <<< MUDANÇA 2: Definir o tamanho do sub-array >>>
-                # Uma escolha comum é M-1, onde M é o número total de antenas.
                 subarray_size = num_antennas_per_array - 1
 
-                # <<< MUDANÇA 3: Chamar a função do SS-Capon >>>
                 angles_rad, powers_db = SS_CAPON.estimate_ss_capon(
                     covariance_matrix_for_array, 
-                    num_antennas_per_array,  # M (tamanho original)
-                    subarray_size,           # m (tamanho do sub-array)
+                    num_antennas_per_array,  # M (original size)
+                    subarray_size,           # m (sub-array)
                     ANTENNA_SPACING_METERS, 
                     SPEED_OF_LIGHT, 
                     CENTER_FREQUENCY_HZ, 
@@ -106,12 +102,10 @@ for dataset in all_datasets:
     np.save(os.path.join("aoa_estimates", dataset_name + ".aoa_powers.npy"), np.asarray(dataset["cluster_aoa_powers"]))
 
 # --- 4. Evaluation and Visualization ---
-# <<< MUDANÇA 4: Salvar gráficos em uma nova pasta >>>
 plots_output_dir = "plots_3_AoA_Estimation_SSCAPON" 
 os.makedirs(plots_output_dir, exist_ok=True)
 
 for dataset in tqdm(test_set_robot + test_set_human):
-    # O resto do código de plotagem é o mesmo, apenas os títulos e nomes dos arquivos são alterados
     relative_pos = dataset['cluster_positions'][:,np.newaxis,:] - espargos_0007.array_positions
     normal = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_normalvectors)
     right = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_rightvectors)
@@ -128,7 +122,6 @@ for dataset in tqdm(test_set_robot + test_set_human):
         axes[0].set_title(f"SS-Capon AoA Estimates from Array {b}")
         axes[1].set_title(f"Ideal AoAs from Array {b}")
         axes[2].set_title(f"SS-Capon AoA Estimation Error, MAE = {mae:.2f}°")
-        # ... (código de plotagem restante)
         im1 = axes[0].scatter(dataset["cluster_positions"][:,0], dataset["cluster_positions"][:,1], c = np.rad2deg(dataset["cluster_aoa_angles"][:,b]), norm = norm)
         im2 = axes[1].scatter(dataset["cluster_positions"][:,0], dataset["cluster_positions"][:,1], c = np.rad2deg(dataset["cluster_groundtruth_aoas"][:,b]), norm = norm)
         im3 = axes[2].scatter(dataset["cluster_positions"][:,0], dataset["cluster_positions"][:,1], c = np.rad2deg(estimation_errors[:,b]), norm = norm)
@@ -137,7 +130,6 @@ for dataset in tqdm(test_set_robot + test_set_human):
         plt.tight_layout(rect=[0, 0, 0.9, 1])
         
         safe_dataset_basename = os.path.basename(dataset['filename']).replace(".tfrecords", "")
-        # <<< MUDANÇA 5: Novo nome para o arquivo de plot >>>
         plot_filename = f"ss_capon_aoa_array{b}_{safe_dataset_basename}.png"
         plt.savefig(os.path.join(plots_output_dir, plot_filename))
         plt.close(fig)

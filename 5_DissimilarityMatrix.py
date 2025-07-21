@@ -140,17 +140,57 @@ if __name__ == '__main__':
     training_set = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
     print("Training dataset loaded.")
 
-    # Create output directories if they don't exist
-    os.makedirs("clutter_channel_estimates", exist_ok=True)
-    os.makedirs("triangulation_estimates", exist_ok=True)
-    os.makedirs("dissimilarity_matrices", exist_ok=True)
+
 
     print("Loading precomputed estimates (clutter, triangulation)...")
+
+    # Dictionary mapping the algorithm names to their respective results folders
+    aoa_algorithms_folders = {
+        "unitary root music": ("triangulation_estimates", "aoa_estimates"),
+        "music": ("triangulation_estimates_MUSIC", "aoa_estimates_MUSIC"),
+        "esprit": ("triangulation_estimates_ESPRIT", "aoa_estimates_ESPRIT"),
+        "delay and sum": ("triangulation_estimates_DELAY_AND_SUM", "aoa_estimates_DAS"),
+        "capon": ("triangulation_estimates_CAPON", "aoa_estimates_CAPON"),
+        "ss capon": ("triangulation_estimates_SSCAPON", "aoa_estimates_SSCAPON")
+    }
+
+    # Loop to ensure a valid option is chosen
+    while True:
+        prompt = ("\nChoose the AoA algorithm whose results you want to use:\n"
+                " -> Unitary Root-MUSIC\n"
+                " -> MUSIC\n"
+                " -> ESPRIT\n"
+                " -> Delay and Sum\n"
+                " -> Capon\n"
+                " -> SS Capon\n"
+                "Your choice: ")
+        
+        aoa_algorithm = input(prompt)
+        aoa_algorithm = aoa_algorithm.lower().replace('-', ' ')
+        
+        if aoa_algorithm in aoa_algorithms_folders:
+            triangulation_dir, aoa_dir = aoa_algorithms_folders[aoa_algorithm]
+            print(f"OK, using triangulation results from folder: '{triangulation_dir}'")
+            break
+        else:
+            print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")
+    
+    # Create output directories if they don't exist
+    os.makedirs("clutter_channel_estimates", exist_ok=True)
+    # The 'aoa_algorithm' variable is defined by the user input block at the start of the script.
+    if aoa_algorithm == "unitary root music":
+        dissimilarity_matrices_dir = "dissimilarity_matrices"
+    else:
+        algorithm_suffix = aoa_algorithm.upper().replace(' ', '_')
+        dissimilarity_matrices_dir = f"dissimilarity_matrices_{algorithm_suffix}"
+
+    os.makedirs(dissimilarity_matrices_dir, exist_ok=True)
+
     for dataset in training_set:
         dataset_name = os.path.basename(dataset['filename'])
         # Load clutter signatures and triangulation estimates from previous scripts
         clutter_path = os.path.join("clutter_channel_estimates", dataset_name + ".npy")
-        triangulation_path = os.path.join("triangulation_estimates", dataset_name + ".npy")
+        triangulation_path = os.path.join(triangulation_dir, dataset_name + ".npy")
         if not os.path.exists(clutter_path) or not os.path.exists(triangulation_path):
             print(f"ERROR: Missing precomputed files for {dataset_name}. Exiting.")
             exit()
@@ -414,7 +454,7 @@ if __name__ == '__main__':
     print(f"Scaling factor to meters: {scaling_factor_meters}")
 
     # Save the final matrix to be used by the Channel Charting script
-    output_filename = os.path.join("dissimilarity_matrices", espargos_0007.hash_dataset_names(training_set) + ".geodesic_meters.npy")
+    output_filename = os.path.join(dissimilarity_matrices_dir, espargos_0007.hash_dataset_names(training_set) + ".geodesic_meters.npy")
     np.save(output_filename, dissimilarity_matrix_geodesic_meters)
     print(f"Geodesic dissimilarity matrix (in meters) saved to: {output_filename}")
 

@@ -23,7 +23,7 @@ all_datasets = training_set_robot + test_set_robot + test_set_human
 for dataset in all_datasets:
     dataset['clutter_acquisitions'] = np.load(os.path.join("clutter_channel_estimates", os.path.basename(dataset['filename']) + ".npy"))
 
-os.makedirs("aoa_estimates", exist_ok=True)
+os.makedirs("aoa_estimates_DAS", exist_ok=True)
 
 for dataset in all_datasets:
     cluster_utils.cluster_dataset(dataset)
@@ -94,8 +94,8 @@ print(f"\n--- Total Execution Time (DAS): {elapsed_time_das:.2f} seconds ---\n")
 # --- 3. Save Results ---
 for dataset in all_datasets:
     dataset_name = os.path.basename(dataset['filename'])
-    np.save(os.path.join("aoa_estimates", dataset_name + ".aoa_angles.npy"), np.asarray(dataset["cluster_aoa_angles"]))
-    np.save(os.path.join("aoa_estimates", dataset_name + ".aoa_powers.npy"), np.asarray(dataset["cluster_aoa_powers"]))
+    np.save(os.path.join("aoa_estimates_DAS", dataset_name + ".aoa_angles.npy"), np.asarray(dataset["cluster_aoa_angles"]))
+    np.save(os.path.join("aoa_estimates_DAS", dataset_name + ".aoa_powers.npy"), np.asarray(dataset["cluster_aoa_powers"]))
 
 # --- 4. Evaluation and Visualization ---
 plots_output_dir = "plots_3_AoA_Estimation_DAS" 

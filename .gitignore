@@ -2,6 +2,11 @@ espargos-0007/
 __pycache__/
 clutter_channel_estimates/
 aoa_estimates/
+aoa_estimates_CAPON/
+aoa_estimates_SSCAPON/
+aoa_estimates_ESPRIT/
+aoa_estimates_MUSIC/
+aoa_estimates_DAS/
 triangulation_estimates/
 dissimilarity_matrices/
 epoch_charts/
@@ -9,6 +14,7 @@ evaluation_charts/
 plots_1_ClutterChannels/
 plots_2_SupervisedBaseline/
 plots_3_AoA_Estimation/
+plots_3_AoA_Estimation_MUSIC/
 plots_3_AoA_Estimation_ESPRIT/
 plots_3_AoA_Estimation_CAPON/
 plots_3_AoA_Estimation_SSCAPON/

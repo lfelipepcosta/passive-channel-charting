@@ -10,7 +10,6 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import time
 
-# Importa o nosso novo módulo com a implementação do ESPRIT
 import ESPRIT
 
 print("--- Running AoA Estimation with ESPRIT Implementation ---")
@@ -25,7 +24,7 @@ all_datasets = training_set_robot + test_set_robot + test_set_human
 for dataset in all_datasets:
     dataset['clutter_acquisitions'] = np.load(os.path.join("clutter_channel_estimates", os.path.basename(dataset['filename']) + ".npy"))
 
-os.makedirs("aoa_estimates", exist_ok=True)
+os.makedirs("aoa_estimates_ESPRIT", exist_ok=True)
 
 for dataset in all_datasets:
     cluster_utils.cluster_dataset(dataset)
@@ -96,31 +95,23 @@ for dataset in tqdm(all_datasets):
         # Append the results for this cluster
         dataset['cluster_aoa_angles'].append(np.asarray(esprit_angles_for_cluster))
         dataset['cluster_aoa_powers'].append(np.asarray(esprit_powers_for_cluster))
-        
-        # ===================================================================
-        # FIM DA LÓGICA DE SUBSTITUIÇÃO
-        # ===================================================================
 
     dataset['cluster_aoa_angles'] = np.asarray(dataset['cluster_aoa_angles'])
     dataset['cluster_aoa_powers'] = np.asarray(dataset['cluster_aoa_powers'])
-
-# O resto do script (salvar resultados e plotar) permanece o mesmo,
-# pois ele apenas usa os dados salvos em 'cluster_aoa_angles' e 'cluster_aoa_powers'.
 
 end_time = time.perf_counter()
 elapsed_time_esprit = end_time - start_time
 print(f"\n--- Tempo de Execução Total (ESPRIT): {elapsed_time_esprit:.2f} segundos ---\n")
 for dataset in all_datasets:
     dataset_name = os.path.basename(dataset['filename'])
-    np.save(os.path.join("aoa_estimates", dataset_name + ".aoa_angles.npy"), np.asarray(dataset["cluster_aoa_angles"]))
-    np.save(os.path.join("aoa_estimates", dataset_name + ".aoa_powers.npy"), np.asarray(dataset["cluster_aoa_powers"]))
+    np.save(os.path.join("aoa_estimates_ESPRIT", dataset_name + ".aoa_angles.npy"), np.asarray(dataset["cluster_aoa_angles"]))
+    np.save(os.path.join("aoa_estimates_ESPRIT", dataset_name + ".aoa_powers.npy"), np.asarray(dataset["cluster_aoa_powers"]))
 
 # Evaluation and Visualization
 plots_output_dir = "plots_3_AoA_Estimation_ESPRIT" 
 os.makedirs(plots_output_dir, exist_ok=True)
 
 for dataset in tqdm(test_set_robot + test_set_human):
-    # O código de plotagem e avaliação não precisa de nenhuma alteração
     relative_pos = dataset['cluster_positions'][:,np.newaxis,:] - espargos_0007.array_positions
     normal = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_normalvectors)
     right = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_rightvectors)
@@ -141,13 +132,11 @@ for dataset in tqdm(test_set_robot + test_set_human):
 
         im1 = axes[0].scatter(dataset["cluster_positions"][:,0], dataset["cluster_positions"][:,1], c = np.rad2deg(dataset["cluster_aoa_angles"][:,b]), norm = norm)
         axes[0].set_title(f"ESPRIT AoA Estimates from Array {b}")
-        # ... (resto do código de plotagem)
         im2 = axes[1].scatter(dataset["cluster_positions"][:,0], dataset["cluster_positions"][:,1], c = np.rad2deg(dataset["cluster_groundtruth_aoas"][:,b]), norm = norm)
         axes[1].set_title(f"Ideal AoAs from Array {b}")
-        # ... (resto do código de plotagem)
         im3 = axes[2].scatter(dataset["cluster_positions"][:,0], dataset["cluster_positions"][:,1], c = np.rad2deg(dataset["cluster_aoa_estimation_errors"][:,b]), norm = norm)
         axes[2].set_title(f"ESPRIT AoA Error from Array {b}, MAE = {mae:.2f}°")
-        # ... (resto do código de plotagem)
+
         
         for ax in axes:
             ax.set_xlabel("x coordinate in m")

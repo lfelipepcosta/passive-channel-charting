@@ -9,6 +9,7 @@ import numpy as np
 import os
 import CCEvaluation
 import matplotlib
+import time
 matplotlib.use('Agg')
 
 # Create a directory to store the final triangulation estimates
@@ -198,6 +199,7 @@ if __name__ == '__main__':
 
     # Main Triangulation Loop (using multiprocessing)
     print("Starting triangulation position estimation for all datasets...")
+    start_time = time.perf_counter()
     for dataset_idx_main, dataset_main in enumerate(tqdm(all_datasets, desc="Processing Datasets")):
         print(f"\nProcessing dataset: {dataset_main['filename']}")
         if 'cluster_aoa_angles' not in dataset_main or 'cluster_positions' not in dataset_main:
@@ -292,7 +294,10 @@ if __name__ == '__main__':
                 p.terminate()
                 p.join() 
         print(f"  Finished processing for {dataset_main['filename']}.")
-
+    end_time = time.perf_counter() # <--- FIM DO TIMER
+    elapsed_time = end_time - start_time
+    print(f"\n--- Total Triangulation Execution Time: {elapsed_time:.2f} seconds ---\n")
+    
     # Save and Evaluate the Triangulation Results
     print("Saving triangulation estimates...")
 

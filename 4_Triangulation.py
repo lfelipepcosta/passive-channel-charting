@@ -122,14 +122,6 @@ if __name__ == '__main__':
     mp.freeze_support()
 
     # The 'aoa_algorithm' variable is defined by the user input block at the start of the script.
-
-    # Load data, AoA estimates, and cluster
-    training_set_robot = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
-    test_set_robot = espargos_0007.load_dataset(espargos_0007.TEST_SET_ROBOT_FILES)
-    test_set_human = espargos_0007.load_dataset(espargos_0007.TEST_SET_HUMAN_FILES)
-
-    all_datasets = training_set_robot + test_set_robot + test_set_human
-    
     # Dictionary mapping the algorithm names to their respective results folders
     aoa_algorithms_folders = {
         "unitary root music": "aoa_estimates",
@@ -167,8 +159,12 @@ if __name__ == '__main__':
 
         # The variable 'aoa_estimates_dir_original' now contains the correct path
         # and can be used in the rest of the script.
-    
-    # The 'aoa_algorithm' variable is defined by the user input block at the start of the script.
+    # Load data, AoA estimates, and cluster
+    training_set_robot = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
+    test_set_robot = espargos_0007.load_dataset(espargos_0007.TEST_SET_ROBOT_FILES)
+    test_set_human = espargos_0007.load_dataset(espargos_0007.TEST_SET_HUMAN_FILES)
+
+    all_datasets = training_set_robot + test_set_robot + test_set_human
 
     # Check for the special case of the default algorithm
     if aoa_algorithm == "unitary root music":
@@ -321,70 +317,64 @@ if __name__ == '__main__':
 
     print(f"Triangulation estimates saved to: {os.path.abspath(triangulation_estimates_dir)}")
     
-    print("\nStarting evaluation...")
     for dataset in (test_set_robot + test_set_human):
         print(f"\nEvaluation for {dataset['filename']}")
 
-        if 'triangulation_position_estimates' not in dataset or \
-           'cluster_positions' not in dataset or \
-           dataset['triangulation_position_estimates'].shape[0] == 0:
-            print(f"  Skipping evaluation for {dataset['filename']} due to missing/empty estimates or cluster_positions.")
+        # Check for necessary data
+        if 'triangulation_position_estimates' not in dataset or 'cluster_positions' not in dataset or dataset['triangulation_position_estimates'].shape[0] == 0:
+            print(f"  Skipping evaluation for {dataset['filename']} due to missing/empty data.")
             continue
         
         estimates_for_eval = dataset['triangulation_position_estimates'][:,:2]
         groundtruth_for_eval = dataset['cluster_positions'][:,:2]
 
+        # Align array lengths
         min_len = min(estimates_for_eval.shape[0], groundtruth_for_eval.shape[0])
-        if min_len == 0:
-            print(f"  No points to evaluate for {dataset['filename']} after length alignment. Skipping.")
-            continue
-        
         estimates_for_eval = estimates_for_eval[:min_len]
         groundtruth_for_eval = groundtruth_for_eval[:min_len]
 
-        nan_mask_estimates = ~np.isnan(estimates_for_eval).any(axis=1)
+        # Filter out NaN values, creating lists of only valid points
+        nan_mask = ~np.isnan(estimates_for_eval).any(axis=1)
+        valid_estimates = estimates_for_eval[nan_mask]
+        valid_groundtruth = groundtruth_for_eval[nan_mask]
         
-        if np.sum(nan_mask_estimates) == 0 :
-            print(f"  WARN: All estimates are NaN for {dataset['filename']} after alignment. Skipping evaluation.")
-            continue
-        
-        if not np.all(nan_mask_estimates):
-            print(f"  WARN: Found {np.sum(~nan_mask_estimates)} NaN estimates in {dataset['filename']}. Removing them and corresponding ground truth for evaluation.")
-            estimates_for_eval = estimates_for_eval[nan_mask_estimates]
-            groundtruth_for_eval = groundtruth_for_eval[nan_mask_estimates] 
-        
-        if estimates_for_eval.shape[0] == 0:
-            print(f"  No valid (non-NaN) points to evaluate for {dataset['filename']}. Skipping.")
+        if valid_estimates.shape[0] == 0:
+            print(f"  WARN: All position estimates were NaN. No valid data to evaluate or plot.")
             continue
 
-        errorvectors, errors, mae, cep = CCEvaluation.compute_localization_metrics(estimates_for_eval, groundtruth_for_eval)
+        # --- Calculations on VALID data only ---
+        metrics = CCEvaluation.compute_all_performance_metrics(valid_estimates, valid_groundtruth)
+        for metric_name, metric_value in metrics.items():
+            print(f"      {metric_name.upper()}: {metric_value:.3f}")
+        
+        # --- Dynamic Plotting ---
         suptitle_text_eval = f"{os.path.splitext(os.path.basename(dataset['filename']))[0]}"
-        title_text_eval = f"Triangulation: MAE = {mae:.3f}m, CEP = {cep:.3f}m"
-
-        plot_filename_scatter = f"triangulation_scatter_{suptitle_text_eval}_mae{mae:.2f}_cep{cep:.2f}.png"
-        full_plot_path_scatter = os.path.join(plots_output_dir, plot_filename_scatter)
-        CCEvaluation.plot_colorized(estimates_for_eval, groundtruth_for_eval, 
-                                    suptitle=suptitle_text_eval, title=title_text_eval, 
-                                    show=False, outfile=full_plot_path_scatter)
-
         
-        try:
-            len_for_metrics = estimates_for_eval.shape[0]
-            if int(0.05 * len_for_metrics) < 1 and len_for_metrics >=1 :
-                 print(f"  INFO: Adjusting n_neighbors for CT/TW metrics as 0.05*N ({0.05*len_for_metrics:.2f}) is less than 1 for {len_for_metrics} points. Using n_neighbors=1 if N>=20, else skipping these metrics.")
-                 
-            metrics = CCEvaluation.compute_all_performance_metrics(estimates_for_eval, groundtruth_for_eval)
-            for metric_name, metric_value in metrics.items():
-                print(f"  {metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
-        except Exception as e_metrics:
-            print(f"  ERROR computing some performance metrics for {dataset['filename']}: {e_metrics}")
-            print(f"    MAE: {mae:.3f}, CEP: {cep:.3f} (calculados separadamente com sucesso)")
-
+        # --- Scatter Plot Generation ---
+        # Calculate dynamic limits based on the full range of valid data
+        all_valid_x = np.concatenate([valid_estimates[:, 0], valid_groundtruth[:, 0]])
+        all_valid_y = np.concatenate([valid_estimates[:, 1], valid_groundtruth[:, 1]])
+        xlim_dynamic = (np.min(all_valid_x) - 1, np.max(all_valid_x) + 1)
+        ylim_dynamic = (np.min(all_valid_y) - 1, np.max(all_valid_y) + 1)
+        
+        plot_filename_scatter = f"triangulation_scatter_{suptitle_text_eval}_mae{metrics['mae']:.2f}_cep{metrics['cep']:.2f}.png"
+        full_plot_path_scatter = os.path.join(plots_output_dir, plot_filename_scatter)
+        
+        # Call the plotting function, passing the dynamic limits
+        CCEvaluation.plot_colorized(valid_estimates, valid_groundtruth, 
+                                    suptitle=suptitle_text_eval, title=f"Triangulation: MAE = {metrics['mae']:.3f}m", 
+                                    show=False, outfile=full_plot_path_scatter,
+                                    xlim=xlim_dynamic, ylim=ylim_dynamic)
+        
+        # --- ECDF Plot Generation ---
+        _, errors, _, _ = CCEvaluation.compute_localization_metrics(valid_estimates, valid_groundtruth)
         if errors.size > 0:
+            # Calculate a dynamic range for the ECDF plot
+            max_error_for_plot = np.percentile(errors, 99.5) if len(errors) > 0 else 1.2
+            
             ecdf_filename = f"triangulation_ecdf_{suptitle_text_eval}.jpg"
             full_ecdf_path = os.path.join(plots_output_dir, ecdf_filename)
-            CCEvaluation.plot_error_ecdf(estimates_for_eval, groundtruth_for_eval, outfile=full_ecdf_path)
-        else:
-            print(f"  Skipping ECDF plot for {dataset['filename']} as there are no errors to plot.")
+            CCEvaluation.plot_error_ecdf(valid_estimates, valid_groundtruth, 
+                                        outfile=full_ecdf_path, maxerr=max_error_for_plot)
 
     print(f"\nPlots for Triangulation saved to: {os.path.abspath(plots_output_dir)}")

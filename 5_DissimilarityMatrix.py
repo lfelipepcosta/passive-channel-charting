@@ -130,20 +130,6 @@ def plot_dissimilarity_over_euclidean_distance(input_dissimilarity_matrix, input
 if __name__ == '__main__':
     # Necessary for multiprocessing on Windows
     mp.freeze_support()
-
-    # Create directory for output plots
-    plots_output_dir = "plots_5_DissimilarityMatrix" 
-    os.makedirs(plots_output_dir, exist_ok=True)
-
-    # Load Data and Pre-computed Estimates
-    print("Loading training dataset...")
-    training_set = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
-    print("Training dataset loaded.")
-
-
-
-    print("Loading precomputed estimates (clutter, triangulation)...")
-
     # Dictionary mapping the algorithm names to their respective results folders
     aoa_algorithms_folders = {
         "unitary root music": ("triangulation_estimates", "aoa_estimates"),
@@ -174,17 +160,30 @@ if __name__ == '__main__':
             break
         else:
             print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")
-    
+
+    # Create directory for output plots
+    #plots_output_dir = "plots_5_DissimilarityMatrix" 
+    #os.makedirs(plots_output_dir, exist_ok=True)
+
+    # Load Data and Pre-computed Estimates
+    print("Loading training dataset...")
+    training_set = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
+    print("Training dataset loaded.")
+
+    print("Loading precomputed estimates (clutter, triangulation)...")
     # Create output directories if they don't exist
     os.makedirs("clutter_channel_estimates", exist_ok=True)
     # The 'aoa_algorithm' variable is defined by the user input block at the start of the script.
     if aoa_algorithm == "unitary root music":
         dissimilarity_matrices_dir = "dissimilarity_matrices"
+        plots_output_dir = "plots_5_DissimilarityMatrix"
     else:
         algorithm_suffix = aoa_algorithm.upper().replace(' ', '_')
         dissimilarity_matrices_dir = f"dissimilarity_matrices_{algorithm_suffix}"
+        plots_output_dir = f"plots_5_DissimilarityMatrix_{algorithm_suffix}"
 
     os.makedirs(dissimilarity_matrices_dir, exist_ok=True)
+    os.makedirs(plots_output_dir, exist_ok=True)
 
     for dataset in training_set:
         dataset_name = os.path.basename(dataset['filename'])

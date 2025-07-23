@@ -14,7 +14,9 @@ def esprit_implementation(covariance_matrix, num_antennas, num_sources, normaliz
                                      signal's wavelength (d/λ).
 
     Returns:
-        np.ndarray: An array containing the estimated angles of arrival, in radians.
+        tuple: A tuple containing:
+            - np.ndarray: An array containing the estimated angles of arrival, in radians.
+            - np.ndarray: An array containing the eigenvalue magnitudes (confidence score).
     """
     # Step 1: Perform eigen-decomposition of the covariance matrix.
     # This breaks the matrix down into its fundamental components (eigenvalues and eigenvectors).
@@ -45,4 +47,8 @@ def esprit_implementation(covariance_matrix, num_antennas, num_sources, normaliz
     # Formula: angle = arcsin(phase_of_eigenvalue / (2 * pi * normalized_spacing))
     angles_rad = np.arcsin(np.angle(psi_eigenvalues) / (2 * np.pi * normalized_spacing))
     
-    return angles_rad
+    # Step 7: Extract the magnitude of the eigenvalues as a confidence metric.
+    # In a noiseless scenario, these should be 1. Deviation from 1 indicates noise.
+    magnitudes = np.abs(psi_eigenvalues)
+
+    return angles_rad, magnitudes

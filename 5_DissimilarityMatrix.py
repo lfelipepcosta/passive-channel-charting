@@ -179,6 +179,8 @@ if __name__ == '__main__':
         plots_output_dir = "plots_5_DissimilarityMatrix"
     else:
         algorithm_suffix = aoa_algorithm.upper().replace(' ', '_')
+        if algorithm_suffix == "SS_CAPON":
+            algorithm_suffix = "SSCAPON"
         dissimilarity_matrices_dir = f"dissimilarity_matrices_{algorithm_suffix}"
         plots_output_dir = f"plots_5_DissimilarityMatrix_{algorithm_suffix}"
 

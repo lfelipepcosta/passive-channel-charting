@@ -10,6 +10,30 @@ import tensorflow as tf
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import time
+
+aoa_algorithms_folders = {
+        "unitary root music": ("aoa_estimates", "dissimilarity_matrices", "plots_6_ChannelCharting"),
+        "music": ("aoa_estimates_MUSIC", "dissimilarity_matrices_MUSIC", "plots_6_ChannelCharting_MUSIC"),
+        "esprit": ("aoa_estimates_ESPRIT", "dissimilarity_matrices_ESPRIT", "plots_6_ChannelCharting_ESPRIT"),
+        "delay and sum": ("aoa_estimates_DAS", "dissimilarity_matrices_DELAY_AND_SUM", "plots_6_ChannelCharting_DELAY_AND_SUM"),
+        "capon": ("aoa_estimates_CAPON", "dissimilarity_matrices_CAPON", "plots_6_ChannelCharting_CAPON"),
+        "ss capon": ("aoa_estimates_SSCAPON", "dissimilarity_matrices_SSCAPON", "plots_6_ChannelCharting_SSCAPON")
+    }
+while True:
+    prompt = ("\nChoose the AoA algorithm whose results you want to use for Channel Charting:\n"
+                  " -> Unitary Root-MUSIC\n -> MUSIC\n -> ESPRIT\n -> Delay and Sum\n"
+                  " -> Capon\n -> SS Capon\nYour choice: ")
+    aoa_algorithm = input(prompt)
+    aoa_algorithm = aoa_algorithm.lower().replace('-', ' ')
+    if aoa_algorithm in aoa_algorithms_folders:
+        aoa_dir, dissimilarity_dir, plots_output_dir = aoa_algorithms_folders[aoa_algorithm]
+        print(f"OK, using AoA data from: '{aoa_dir}'")
+        print(f"Using dissimilarity matrix from: '{dissimilarity_dir}'")
+        print(f"Saving plots to: '{plots_output_dir}'")
+        break
+    else:
+         print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")
 
 training_set_robot = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
 test_set_robot = espargos_0007.load_dataset(espargos_0007.TEST_SET_ROBOT_FILES)
@@ -23,8 +47,8 @@ for dataset in all_datasets:
     dataset["clutter_acquisitions"] = np.load(os.path.join("clutter_channel_estimates", dataset_name + ".npy"))
     # AoA data is only required for the training set for the augmented model
     if dataset in training_set_robot:
-        dataset["cluster_aoa_angles"] = np.load(os.path.join("aoa_estimates", dataset_name + ".aoa_angles.npy"))
-        dataset["cluster_aoa_powers"] = np.load(os.path.join("aoa_estimates", dataset_name + ".aoa_powers.npy"))
+        dataset["cluster_aoa_angles"] = np.load(os.path.join(aoa_dir, dataset_name + ".aoa_angles.npy"))
+        dataset["cluster_aoa_powers"] = np.load(os.path.join(aoa_dir, dataset_name + ".aoa_powers.npy"))
 
 # Group data into temporal clusters
 for dataset in all_datasets:
@@ -126,7 +150,7 @@ def combine_datasets(datasets, for_training = False):
 
     if for_training:
         training_set_name = espargos_0007.hash_dataset_names(datasets)
-        combined["dissimilarity_matrix"] = np.load(os.path.join("dissimilarity_matrices", training_set_name + ".geodesic_meters.npy"))
+        combined["dissimilarity_matrix"] = np.load(os.path.join(dissimilarity_dir, training_set_name + ".geodesic_meters.npy"))
 
     return combined
 
@@ -244,11 +268,12 @@ if __name__ == '__main__':
     human_test_data = combine_datasets(test_set_human)
     
     # Create directory for output plots
-    plots_output_dir = "plots_6_ChannelCharting"
+    #plots_output_dir = "plots_6_ChannelCharting"
     os.makedirs(plots_output_dir, exist_ok=True)
 
     # Train and Evaluate the Un-Augmented PCC Model
     print("\nUn-augmented model")
+    start_time_unaugmented = time.perf_counter()
     fcf_model = train_model(robot_training_data, augmented=False)
     
     print("\nTest set robot")
@@ -274,8 +299,14 @@ if __name__ == '__main__':
     for metric_name, metric_value in metrics.items():
         print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
 
+    end_time_unaugmented = time.perf_counter()
+    elapsed_time_unaugmented = end_time_unaugmented - start_time_unaugmented
+    print(f"\n--- Total Time for Un-augmented Model: {elapsed_time_unaugmented:.2f} seconds ---\n")
+
+
     # Train and Evaluate the Augmented PCC Model
     print("\nAugmented model")
+    start_time_augmented = time.perf_counter()
     augmented_fcf_model = train_model(robot_training_data, augmented=True)
     
     print("\nTraining set robot")
@@ -299,3 +330,7 @@ if __name__ == '__main__':
     CCEvaluation.plot_error_ecdf(test_set_human_predictions, human_test_data["cluster_positions"], outfile=os.path.join(plots_output_dir, "pcc_aug_human_ecdf.jpg"))
     for metric_name, metric_value in metrics.items():
         print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
+    
+    end_time_augmented = time.perf_counter()
+    elapsed_time_augmented = end_time_augmented - start_time_augmented
+    print(f"\n--- Total Time for Augmented Model: {elapsed_time_augmented:.2f} seconds ---\n")

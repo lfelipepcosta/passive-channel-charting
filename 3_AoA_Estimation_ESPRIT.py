@@ -83,9 +83,11 @@ for dataset in tqdm(all_datasets):
             # Call the ESPRIT function
             # It returns an array of angles; we take the first element since num_sources=1
             try:
-                angle_rad = ESPRIT.esprit_implementation(covariance_matrix_for_array, num_antennas_per_array, num_sources, normalized_spacing)[0]
+                angles_rad, magnitudes = ESPRIT.esprit_implementation(covariance_matrix_for_array, num_antennas_per_array, num_sources, normalized_spacing)
+                angle_rad = angles_rad[0]
+                magnitude = magnitudes[0]
                 esprit_angles_for_cluster.append(angle_rad)
-                esprit_powers_for_cluster.append(1.0) # Placeholder for power
+                esprit_powers_for_cluster.append(magnitude)
             except Exception as e:
                 # If ESPRIT fails for any reason (e.g., matrix is singular), append NaN
                 print(f"Warning: ESPRIT failed for a cluster. Error: {e}")

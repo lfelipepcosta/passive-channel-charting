@@ -11,6 +11,7 @@ from scipy.sparse.csgraph import dijkstra
 from sklearn.neighbors import NearestNeighbors, kneighbors_graph 
 from tqdm.auto import tqdm
 import scipy.special 
+import sys
 
 os.makedirs("dissimilarity_matrices", exist_ok=True)
 
@@ -131,16 +132,49 @@ if __name__ == '__main__':
     # Necessary for multiprocessing on Windows
     mp.freeze_support()
     # Dictionary mapping the algorithm names to their respective results folders
-    aoa_algorithms_folders = {
+    '''aoa_algorithms_folders = {
         "unitary root music": ("triangulation_estimates", "aoa_estimates"),
         "music": ("triangulation_estimates_MUSIC", "aoa_estimates_MUSIC"),
         "esprit": ("triangulation_estimates_ESPRIT", "aoa_estimates_ESPRIT"),
         "delay and sum": ("triangulation_estimates_DELAY_AND_SUM", "aoa_estimates_DAS"),
         "capon": ("triangulation_estimates_CAPON", "aoa_estimates_CAPON"),
         "ss capon": ("triangulation_estimates_SSCAPON", "aoa_estimates_SSCAPON")
+    }'''
+
+    aoa_algorithms_folders = {
+    "unitary root music": ("triangulation_estimates", "aoa_estimates"),
+    "music": ("triangulation_estimates_MUSIC", "aoa_estimates_MUSIC"),
+    "esprit": ("triangulation_estimates_ESPRIT", "aoa_estimates_ESPRIT"),
+    "delay and sum": ("triangulation_estimates_DELAY_AND_SUM", "aoa_estimates_DAS"),
+    "capon": ("triangulation_estimates_CAPON", "aoa_estimates_CAPON"),
+    "ss capon": ("triangulation_estimates_SSCAPON", "aoa_estimates_SSCAPON")
     }
 
+    if len(sys.argv) > 1:
+        aoa_algorithm = sys.argv[1].lower().replace('-', ' ')
+        round_num = sys.argv[2] if len(sys.argv) > 2 else '1'
+        if aoa_algorithm not in aoa_algorithms_folders:
+            print(f"*** Error: Invalid algorithm '{sys.argv[1]}' provided. Exiting. ***")
+            exit()
+    else:
+        # Fallback para input manual se rodar sozinho
+        while True:
+            prompt = ("\nChoose the AoA algorithm whose results you want to use:\n"
+                    " -> Unitary Root-MUSIC\n -> MUSIC\n -> ESPRIT\n -> Delay and Sum\n"
+                    " -> Capon\n -> SS Capon\nYour choice: ")
+            aoa_algorithm = input(prompt).lower().replace('-', ' ')
+            if aoa_algorithm in aoa_algorithms_folders:
+                break
+            else:
+                print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")
+        round_num = '1'
+
+    # Pega os nomes dos diretórios corretamente
+    triangulation_dir, aoa_dir = aoa_algorithms_folders[aoa_algorithm]
+    print(f"OK, using triangulation results from folder: '{triangulation_dir}'")
+
     # Loop to ensure a valid option is chosen
+    '''
     while True:
         prompt = ("\nChoose the AoA algorithm whose results you want to use:\n"
                 " -> Unitary Root-MUSIC\n"
@@ -159,7 +193,7 @@ if __name__ == '__main__':
             print(f"OK, using triangulation results from folder: '{triangulation_dir}'")
             break
         else:
-            print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")
+            print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")'''
 
     # Create directory for output plots
     #plots_output_dir = "plots_5_DissimilarityMatrix" 
@@ -183,6 +217,9 @@ if __name__ == '__main__':
             algorithm_suffix = "SSCAPON"
         dissimilarity_matrices_dir = f"dissimilarity_matrices_{algorithm_suffix}"
         plots_output_dir = f"plots_5_DissimilarityMatrix_{algorithm_suffix}"
+
+    round_plots_dir = os.path.join(plots_output_dir, f"Round_{round_num}")
+    os.makedirs(round_plots_dir, exist_ok=True)
 
     os.makedirs(dissimilarity_matrices_dir, exist_ok=True)
     os.makedirs(plots_output_dir, exist_ok=True)
@@ -289,7 +326,7 @@ if __name__ == '__main__':
     plt.hist(adp_dissimilarity_matrix.flatten(), bins = 100)
     adp_min = np.quantile(adp_dissimilarity_matrix.flatten(), 0.002) 
     plt.title(f"Minimal Dissimilarity = {adp_min:.3f}")
-    plt.savefig(os.path.join(plots_output_dir, "adp_histogram.png"))
+    plt.savefig(os.path.join(round_plots_dir, "adp_histogram.png"))
     plt.close()
 
     adp_thresh = 0.2
@@ -299,7 +336,7 @@ if __name__ == '__main__':
     plt.imshow(adp_dissimilarity_matrix)
     plt.title("ADP Dissimilarity Matrix")
     plt.colorbar()
-    plt.savefig(os.path.join(plots_output_dir, "adp_matrix_raw.png"))
+    plt.savefig(os.path.join(round_plots_dir, "adp_matrix_raw.png"))
     plt.close()
 
     # Fuse with Time and Calculate Geodesic Dissimilarity
@@ -325,7 +362,7 @@ if __name__ == '__main__':
     plt.figure() 
     plt.imshow(groundtruth_distance_matrix)
     plt.title("Groundtruth Distance Matrix"); plt.colorbar();
-    plt.savefig(os.path.join(plots_output_dir, "groundtruth_distance_matrix.png"))
+    plt.savefig(os.path.join(round_plots_dir, "groundtruth_distance_matrix.png"))
     plt.close()
 
     if sample_count > 1:
@@ -336,7 +373,7 @@ if __name__ == '__main__':
             plt.scatter(training_groundtruth_positions[:,0], training_groundtruth_positions[:,1], c = adp_dissimilarity_matrix_shifted[:,sample_index], s = 1, vmin = 0, vmax = 3) # Plot original
             plt.scatter([training_groundtruth_positions[sample_index,0]], [training_groundtruth_positions[sample_index,1]], c = "r", s = 2)
             plt.title("ADP Dissimilarities for Current Position");
-            plt.savefig(os.path.join(plots_output_dir, f"adp_sample_scatter_{sample_index}.png"))
+            plt.savefig(os.path.join(round_plots_dir, f"adp_sample_scatter_{sample_index}.png"))
             plt.close()
 
     training_timestamps = []
@@ -439,7 +476,7 @@ if __name__ == '__main__':
                             plt.hist(ratios, bins = 100, range = (q_low, q_high)) 
                             plt.vlines(scaling_factor_meters, 0, 5000, "r")
                             plt.title(f"Dissimilarity Scaling Factor = {scaling_factor_meters:.3f}")
-                            plt.savefig(os.path.join(plots_output_dir, "scaling_factor_histogram.png"))
+                            plt.savefig(os.path.join(round_plots_dir, "scaling_factor_histogram.png"))
                             plt.close()
 
                         else: scaling_factor_meters = np.median(ratios) if ratios.size > 0 else 1.0
@@ -462,13 +499,13 @@ if __name__ == '__main__':
     plt.figure() 
     plt.imshow(dissimilarity_matrix_geodesic_meters)
     plt.title("Geodesic Dissimilarity Matrix"); plt.colorbar();
-    plt.savefig(os.path.join(plots_output_dir, "geodesic_dissimilarity_matrix_meters.png"))
+    plt.savefig(os.path.join(round_plots_dir, "geodesic_dissimilarity_matrix_meters.png"))
     plt.close()
 
     plt.figure() 
     plt.imshow(groundtruth_distance_matrix)
     plt.title("Groundtruth Distance Matrix"); plt.colorbar();
-    plt.savefig(os.path.join(plots_output_dir, "groundtruth_distance_matrix_replot.png")) 
+    plt.savefig(os.path.join(round_plots_dir, "groundtruth_distance_matrix_replot.png")) 
     plt.close()
 
     if sample_count > 1:
@@ -479,7 +516,7 @@ if __name__ == '__main__':
             plt.scatter(training_groundtruth_positions[:,0], training_groundtruth_positions[:,1], c = dissimilarity_matrix_geodesic_meters[:,sample_index], s = 1, vmin = 0, vmax = 3) # Plot original
             plt.scatter([training_groundtruth_positions[sample_index,0]], [training_groundtruth_positions[sample_index,1]], c = "r", s = 2)
             plt.title("Geodesic Dissimilarities for Current Position");
-            plt.savefig(os.path.join(plots_output_dir, f"geodesic_sample_scatter_{sample_index}.png"))
+            plt.savefig(os.path.join(round_plots_dir, f"geodesic_sample_scatter_{sample_index}.png"))
             plt.close()
 
     plt.figure(figsize = (8,4))
@@ -487,8 +524,8 @@ if __name__ == '__main__':
     plot_dissimilarity_over_euclidean_distance(adp_dissimilarity_matrix, groundtruth_distance_matrix, "ADP") 
     plot_dissimilarity_over_euclidean_distance(adp_dissimilarity_matrix_shifted, groundtruth_distance_matrix, "ADP shifted")
     plt.legend(); plt.xlabel("Euclidean Distance [m]"); plt.ylabel("Dissimilarity");
-    plt.savefig(os.path.join(plots_output_dir, "all_dissimilarities_vs_euclidean.png"))
+    plt.savefig(os.path.join(round_plots_dir, "all_dissimilarities_vs_euclidean.png"))
     plt.close()
 
-    print(f"Plots for Dissimilarity Matrix saved to: {os.path.abspath(plots_output_dir)}")
+    print(f"Plots for Dissimilarity Matrix saved to: {os.path.abspath(round_plots_dir)}")
     print("Script finished.")

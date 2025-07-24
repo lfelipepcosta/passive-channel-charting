@@ -11,6 +11,7 @@ import CCEvaluation
 import matplotlib
 import time
 matplotlib.use('Agg')
+import sys
 
 # Create a directory to store the final triangulation estimates
 os.makedirs("triangulation_estimates", exist_ok=True)
@@ -124,15 +125,39 @@ if __name__ == '__main__':
     # The 'aoa_algorithm' variable is defined by the user input block at the start of the script.
     # Dictionary mapping the algorithm names to their respective results folders
     aoa_algorithms_folders = {
-        "unitary root music": "aoa_estimates",
-        "music": "aoa_estimates_MUSIC",
-        "esprit": "aoa_estimates_ESPRIT",
-        "delay and sum": "aoa_estimates_DAS",
-        "capon": "aoa_estimates_CAPON",
-        "sscapon": "aoa_estimates_SSCAPON"
+    "unitary root music": "aoa_estimates",
+    "music": "aoa_estimates_MUSIC",
+    "esprit": "aoa_estimates_ESPRIT",
+    "delay and sum": "aoa_estimates_DAS",
+    "capon": "aoa_estimates_CAPON",
+    "sscapon": "aoa_estimates_SSCAPON"
     }
 
+    if len(sys.argv) > 1:
+        aoa_algorithm = sys.argv[1].lower().replace('-', ' ')
+        round_num = sys.argv[2] if len(sys.argv) > 2 else '1'
+        if aoa_algorithm not in aoa_algorithms_folders:
+            print(f"*** Error: Invalid algorithm '{sys.argv[1]}' provided. Exiting. ***")
+            exit()
+    else:
+        # Fallback para input manual se rodar sozinho
+        while True:
+            prompt = ("\nChoose the AoA algorithm to use for the next steps:\n"
+                    " -> Unitary Root-MUSIC\n -> MUSIC\n -> ESPRIT\n -> Delay and Sum\n"
+                    " -> Capon\n -> SSCapon\nYour choice: ")
+            aoa_algorithm = input(prompt).lower().replace('-', ' ')
+            if aoa_algorithm in aoa_algorithms_folders:
+                break
+            else:
+                print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")
+        round_num = '1'
+
+    # Esta é a linha corrigida que define a variável que estava faltando
+    aoa_estimates_dir_original = aoa_algorithms_folders[aoa_algorithm]
+    print(f"OK, using results from the folder: '{aoa_estimates_dir_original}'")
+
     # Loop to ensure a valid option is chosen
+    '''
     while True:
         # Prompt the user to choose an algorithm
         prompt = ("\nChoose the AoA algorithm to use for the next steps:\n"
@@ -159,6 +184,7 @@ if __name__ == '__main__':
 
         # The variable 'aoa_estimates_dir_original' now contains the correct path
         # and can be used in the rest of the script.
+        '''
     # Load data, AoA estimates, and cluster
     training_set_robot = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
     test_set_robot = espargos_0007.load_dataset(espargos_0007.TEST_SET_ROBOT_FILES)
@@ -166,15 +192,14 @@ if __name__ == '__main__':
 
     all_datasets = training_set_robot + test_set_robot + test_set_human
 
-    # Check for the special case of the default algorithm
     if aoa_algorithm == "unitary root music":
-        # If it's the default, keep the original folder name
         plots_output_dir = "plots_4_Triangulation"
     else:
-        # For all other algorithms, create a dynamic folder name
-        # Convert the algorithm name to uppercase and replace spaces with underscores for a clean folder name
         algorithm_suffix = aoa_algorithm.upper().replace(' ', '_')
         plots_output_dir = f"plots_4_Triangulation_{algorithm_suffix}"
+
+    round_plots_dir = os.path.join(plots_output_dir, f"Round_{round_num}")
+    os.makedirs(round_plots_dir, exist_ok=True)
 
     os.makedirs(plots_output_dir, exist_ok=True)
     
@@ -358,7 +383,7 @@ if __name__ == '__main__':
         ylim_dynamic = (np.min(all_valid_y) - 1, np.max(all_valid_y) + 1)
         
         plot_filename_scatter = f"triangulation_scatter_{suptitle_text_eval}_mae{metrics['mae']:.2f}_cep{metrics['cep']:.2f}.png"
-        full_plot_path_scatter = os.path.join(plots_output_dir, plot_filename_scatter)
+        full_plot_path_scatter = os.path.join(round_plots_dir, plot_filename_scatter)
         
         # Call the plotting function, passing the dynamic limits
         CCEvaluation.plot_colorized(valid_estimates, valid_groundtruth, 
@@ -373,7 +398,7 @@ if __name__ == '__main__':
             max_error_for_plot = np.percentile(errors, 99.5) if len(errors) > 0 else 1.2
             
             ecdf_filename = f"triangulation_ecdf_{suptitle_text_eval}.jpg"
-            full_ecdf_path = os.path.join(plots_output_dir, ecdf_filename)
+            full_ecdf_path = os.path.join(round_plots_dir, ecdf_filename)
             CCEvaluation.plot_error_ecdf(valid_estimates, valid_groundtruth, 
                                         outfile=full_ecdf_path, maxerr=max_error_for_plot)
 

@@ -42,12 +42,19 @@ def esprit_implementation(covariance_matrix, num_antennas, num_sources, normaliz
     # Step 5: The eigenvalues of the rotational matrix `Psi` contain the phase information.
     psi_eigenvalues = np.linalg.eigvals(psi)
 
-    # Step 6: Calculate the arrival angles from the phase of Psi's eigenvalues.
+    # Step 6: Calculate the argument for the arcsin
+    argument = np.angle(psi_eigenvalues) / (2 * np.pi * normalized_spacing)
+
+    # Step 7: Ensure numerical stability by clipping the argument to the valid range [-1, 1]
+    # This is the crucial fix to prevent NaNs
+    clipped_argument = np.clip(argument, -1.0, 1.0)
+
+    # Step 8: Calculate the arrival angles using the safe, clipped argument
     # The phase of the eigenvalue is directly proportional to the sine of the arrival angle.
     # Formula: angle = arcsin(phase_of_eigenvalue / (2 * pi * normalized_spacing))
-    angles_rad = np.arcsin(np.angle(psi_eigenvalues) / (2 * np.pi * normalized_spacing))
+    angles_rad = np.arcsin(clipped_argument)
     
-    # Step 7: Extract the magnitude of the eigenvalues as a confidence metric.
+    # Step 9: Extract the magnitude of the eigenvalues as a confidence metric.
     # In a noiseless scenario, these should be 1. Deviation from 1 indicates noise.
     magnitudes = np.abs(psi_eigenvalues)
 

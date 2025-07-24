@@ -9,6 +9,11 @@ matplotlib.use('Agg')
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import time
+import sys
+
+# Pega o número da rodada a partir do argumento da linha de comando
+# Se nenhum argumento for passado, assume a rodada 1 como padrão.
+round_num = sys.argv[1] if len(sys.argv) > 1 else '1'
 
 import ESPRIT
 
@@ -86,6 +91,7 @@ for dataset in tqdm(all_datasets):
                 angles_rad, magnitudes = ESPRIT.esprit_implementation(covariance_matrix_for_array, num_antennas_per_array, num_sources, normalized_spacing)
                 angle_rad = angles_rad[0]
                 magnitude = magnitudes[0]
+                magnitude = np.clip(magnitude, 0.0, 1.0)
                 esprit_angles_for_cluster.append(angle_rad)
                 esprit_powers_for_cluster.append(magnitude)
             except Exception as e:
@@ -111,7 +117,10 @@ for dataset in all_datasets:
 
 # Evaluation and Visualization
 plots_output_dir = "plots_3_AoA_Estimation_ESPRIT" 
+round_plots_dir = os.path.join(plots_output_dir, f"Round_{round_num}")
+os.makedirs(round_plots_dir, exist_ok=True)
 os.makedirs(plots_output_dir, exist_ok=True)
+
 
 for dataset in tqdm(test_set_robot + test_set_human):
     relative_pos = dataset['cluster_positions'][:,np.newaxis,:] - espargos_0007.array_positions
@@ -154,7 +163,8 @@ for dataset in tqdm(test_set_robot + test_set_human):
         plot_filename = f"esprit_aoa_array{b}_{safe_dataset_basename}.png"
         full_plot_path = os.path.join(plots_output_dir, plot_filename)
         
-        plt.savefig(full_plot_path, bbox_inches='tight')
+        #plt.savefig(full_plot_path, bbox_inches='tight')
+        plt.savefig(os.path.join(round_plots_dir, plot_filename))
         plt.close(fig)
         
 print(f"Plots for ESPRIT AoA Estimation saved to: {os.path.abspath(plots_output_dir)}")

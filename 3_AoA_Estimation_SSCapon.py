@@ -1,4 +1,3 @@
-# 3_AoA_Estimation_SSCapon.py
 from tqdm.auto import tqdm
 import espargos_0007
 import cluster_utils
@@ -10,8 +9,13 @@ matplotlib.use('Agg')
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import time
+import sys
 
 import SS_CAPON
+
+# Pega o número da rodada a partir do argumento da linha de comando
+# Se nenhum argumento for passado, assume a rodada 1 como padrão.
+round_num = sys.argv[1] if len(sys.argv) > 1 else '1'
 
 print("--- Running AoA Estimation with SS-CAPON Implementation ---")
 
@@ -103,6 +107,8 @@ for dataset in all_datasets:
 
 # --- 4. Evaluation and Visualization ---
 plots_output_dir = "plots_3_AoA_Estimation_SSCAPON" 
+round_plots_dir = os.path.join(plots_output_dir, f"Round_{round_num}")
+os.makedirs(round_plots_dir, exist_ok=True)
 os.makedirs(plots_output_dir, exist_ok=True)
 
 for dataset in tqdm(test_set_robot + test_set_human):
@@ -131,7 +137,8 @@ for dataset in tqdm(test_set_robot + test_set_human):
         
         safe_dataset_basename = os.path.basename(dataset['filename']).replace(".tfrecords", "")
         plot_filename = f"ss_capon_aoa_array{b}_{safe_dataset_basename}.png"
-        plt.savefig(os.path.join(plots_output_dir, plot_filename))
+        #plt.savefig(os.path.join(plots_output_dir, plot_filename))
+        plt.savefig(os.path.join(round_plots_dir, plot_filename))
         plt.close(fig)
         
 print(f"Plots for SS-Capon AoA Estimation saved to: {os.path.abspath(plots_output_dir)}")

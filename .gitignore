@@ -15,3 +15,6 @@ clutter_channel_estimates/
 epoch_charts/
 evaluation_charts/
 plots_*/
+
+experiment_logs/
+Arquivo/

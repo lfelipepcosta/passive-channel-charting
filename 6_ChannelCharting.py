@@ -11,8 +11,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
+import sys
 
-aoa_algorithms_folders = {
+'''aoa_algorithms_folders = {
         "unitary root music": ("aoa_estimates", "dissimilarity_matrices", "plots_6_ChannelCharting"),
         "music": ("aoa_estimates_MUSIC", "dissimilarity_matrices_MUSIC", "plots_6_ChannelCharting_MUSIC"),
         "esprit": ("aoa_estimates_ESPRIT", "dissimilarity_matrices_ESPRIT", "plots_6_ChannelCharting_ESPRIT"),
@@ -33,7 +34,43 @@ while True:
         print(f"Saving plots to: '{plots_output_dir}'")
         break
     else:
-         print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")
+         print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")'''
+
+aoa_algorithms_folders = {
+    "unitary root music": ("aoa_estimates", "dissimilarity_matrices", "plots_6_ChannelCharting"),
+    "music": ("aoa_estimates_MUSIC", "dissimilarity_matrices_MUSIC", "plots_6_ChannelCharting_MUSIC"),
+    "esprit": ("aoa_estimates_ESPRIT", "dissimilarity_matrices_ESPRIT", "plots_6_ChannelCharting_ESPRIT"),
+    "delay and sum": ("aoa_estimates_DAS", "dissimilarity_matrices_DELAY_AND_SUM", "plots_6_ChannelCharting_DELAY_AND_SUM"),
+    "capon": ("aoa_estimates_CAPON", "dissimilarity_matrices_CAPON", "plots_6_ChannelCharting_CAPON"),
+    "ss capon": ("aoa_estimates_SSCAPON", "dissimilarity_matrices_SSCAPON", "plots_6_ChannelCharting_SSCAPON")
+}
+
+if len(sys.argv) > 1:
+    aoa_algorithm = sys.argv[1].lower().replace('-', ' ')
+    round_num = sys.argv[2] if len(sys.argv) > 2 else '1'
+    if aoa_algorithm not in aoa_algorithms_folders:
+        print(f"*** Error: Invalid algorithm '{sys.argv[1]}' provided. Exiting. ***")
+        exit()
+else:
+    # Fallback para input manual se rodar sozinho
+    while True:
+        prompt = ("\nChoose the AoA algorithm whose results you want to use for Channel Charting:\n"
+                      " -> Unitary Root-MUSIC\n -> MUSIC\n -> ESPRIT\n -> Delay and Sum\n"
+                      " -> Capon\n -> SS Capon\nYour choice: ")
+        aoa_algorithm = input(prompt).lower().replace('-', ' ')
+        if aoa_algorithm in aoa_algorithms_folders:
+            break
+        else:
+             print("\n*** Error: Invalid option. Please type the name of one of the algorithms from the list. ***")
+    round_num = '1'
+
+# Pega os nomes dos diretórios corretamente
+aoa_dir, dissimilarity_dir, plots_output_dir = aoa_algorithms_folders[aoa_algorithm]
+round_plots_dir = os.path.join(plots_output_dir, f"Round_{round_num}")
+os.makedirs(round_plots_dir, exist_ok=True)
+print(f"OK, using AoA data from: '{aoa_dir}'")
+print(f"Using dissimilarity matrix from: '{dissimilarity_dir}'")
+print(f"Saving plots to: '{round_plots_dir}'")
 
 training_set_robot = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
 test_set_robot = espargos_0007.load_dataset(espargos_0007.TEST_SET_ROBOT_FILES)
@@ -284,8 +321,8 @@ if __name__ == '__main__':
     # Compute and print all performance metrics
     metrics = CCEvaluation.compute_all_performance_metrics(test_set_robot_predictions_transformed, robot_test_data["cluster_positions"])
     # Generate and save evaluation plots
-    CCEvaluation.plot_colorized(test_set_robot_predictions_transformed, robot_test_data["cluster_positions"], suptitle="PCC on Test Set (Robot)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(plots_output_dir, "pcc_unaug_robot_scatter.jpg"))
-    CCEvaluation.plot_error_ecdf(test_set_robot_predictions_transformed, robot_test_data["cluster_positions"], outfile=os.path.join(plots_output_dir, "pcc_unaug_robot_ecdf.jpg"))
+    CCEvaluation.plot_colorized(test_set_robot_predictions_transformed, robot_test_data["cluster_positions"], suptitle="PCC on Test Set (Robot)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(round_plots_dir, "pcc_unaug_robot_scatter.jpg"))
+    CCEvaluation.plot_error_ecdf(test_set_robot_predictions_transformed, robot_test_data["cluster_positions"], outfile=os.path.join(round_plots_dir, "pcc_unaug_robot_ecdf.jpg"))
     for metric_name, metric_value in metrics.items():
         print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
 
@@ -294,8 +331,8 @@ if __name__ == '__main__':
     test_set_human_predictions = fcf_model.predict(human_test_data["cluster_features"])
     test_set_human_predictions_transformed = affine_transform_channel_chart(human_test_data["cluster_positions"], test_set_human_predictions)
     metrics = CCEvaluation.compute_all_performance_metrics(test_set_human_predictions_transformed, human_test_data["cluster_positions"])
-    CCEvaluation.plot_colorized(test_set_human_predictions_transformed, human_test_data["cluster_positions"], suptitle="PCC on Test Set (Human)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(plots_output_dir, "pcc_unaug_human_scatter.jpg"))
-    CCEvaluation.plot_error_ecdf(test_set_human_predictions_transformed, human_test_data["cluster_positions"], outfile=os.path.join(plots_output_dir, "pcc_unaug_human_ecdf.jpg"))
+    CCEvaluation.plot_colorized(test_set_human_predictions_transformed, human_test_data["cluster_positions"], suptitle="PCC on Test Set (Human)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(round_plots_dir, "pcc_unaug_human_scatter.jpg"))
+    CCEvaluation.plot_error_ecdf(test_set_human_predictions_transformed, human_test_data["cluster_positions"], outfile=os.path.join(round_plots_dir, "pcc_unaug_human_ecdf.jpg"))
     for metric_name, metric_value in metrics.items():
         print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
 
@@ -312,22 +349,22 @@ if __name__ == '__main__':
     print("\nTraining set robot")
     training_set_robot_predictions = augmented_fcf_model.predict(robot_training_data["cluster_features"]) + espargos_0007.centroid[:2]
     metrics = CCEvaluation.compute_all_performance_metrics(training_set_robot_predictions, robot_training_data["cluster_positions"])
-    CCEvaluation.plot_colorized(training_set_robot_predictions, robot_training_data["cluster_positions"], suptitle="Augmented PCC on Training Set (Robot)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(plots_output_dir, "pcc_aug_train_robot_scatter.png"))
+    CCEvaluation.plot_colorized(training_set_robot_predictions, robot_training_data["cluster_positions"], suptitle="Augmented PCC on Training Set (Robot)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(round_plots_dir, "pcc_aug_train_robot_scatter.png"))
     
     print("\nTest set robot")
     # Get predictions. No affine transform is needed for the augmented model
     test_set_robot_predictions = augmented_fcf_model.predict(robot_test_data["cluster_features"]) + espargos_0007.centroid[:2]
     metrics = CCEvaluation.compute_all_performance_metrics(test_set_robot_predictions, robot_test_data["cluster_positions"])
-    CCEvaluation.plot_colorized(test_set_robot_predictions, robot_test_data["cluster_positions"], suptitle="Augmented PCC on Test Set (Robot)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(plots_output_dir, "pcc_aug_robot_scatter.png"))
-    CCEvaluation.plot_error_ecdf(test_set_robot_predictions, robot_test_data["cluster_positions"], outfile=os.path.join(plots_output_dir, "pcc_aug_robot_ecdf.jpg"))
+    CCEvaluation.plot_colorized(test_set_robot_predictions, robot_test_data["cluster_positions"], suptitle="Augmented PCC on Test Set (Robot)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(round_plots_dir, "pcc_aug_robot_scatter.png"))
+    CCEvaluation.plot_error_ecdf(test_set_robot_predictions, robot_test_data["cluster_positions"], outfile=os.path.join(round_plots_dir, "pcc_aug_robot_ecdf.jpg"))
     for metric_name, metric_value in metrics.items():
         print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
 
     print("\nTest set human")
     test_set_human_predictions = augmented_fcf_model.predict(human_test_data["cluster_features"]) + espargos_0007.centroid[:2]
     metrics = CCEvaluation.compute_all_performance_metrics(test_set_human_predictions, human_test_data["cluster_positions"])
-    CCEvaluation.plot_colorized(test_set_human_predictions, human_test_data["cluster_positions"], suptitle="Augmented PCC on Test Set (Human)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(plots_output_dir, "pcc_aug_human_scatter.png"))
-    CCEvaluation.plot_error_ecdf(test_set_human_predictions, human_test_data["cluster_positions"], outfile=os.path.join(plots_output_dir, "pcc_aug_human_ecdf.jpg"))
+    CCEvaluation.plot_colorized(test_set_human_predictions, human_test_data["cluster_positions"], suptitle="Augmented PCC on Test Set (Human)", title=f"Unsupervised: MAE = {metrics['mae']:.3f}m", show=False, outfile=os.path.join(round_plots_dir, "pcc_aug_human_scatter.png"))
+    CCEvaluation.plot_error_ecdf(test_set_human_predictions, human_test_data["cluster_positions"], outfile=os.path.join(round_plots_dir, "pcc_aug_human_ecdf.jpg"))
     for metric_name, metric_value in metrics.items():
         print(f"{metric_name.upper().rjust(6, ' ')}: {metric_value:.3f}")
     

@@ -9,6 +9,11 @@ matplotlib.use('Agg')
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import time
+import sys
+
+# Pega o número da rodada a partir do argumento da linha de comando
+# Se nenhum argumento for passado, assume a rodada 1 como padrão.
+round_num = sys.argv[1] if len(sys.argv) > 1 else '1'
 
 # Data Loading and Preprocessing
 
@@ -132,6 +137,8 @@ for dataset in all_datasets:
 
 # Evaluation and Visualizatio
 plots_output_dir = "plots_3_AoA_Estimation" 
+round_plots_dir = os.path.join(plots_output_dir, f"Round_{round_num}")
+os.makedirs(round_plots_dir, exist_ok=True)
 os.makedirs(plots_output_dir, exist_ok=True)
 
 # Loop through the test sets to create plots
@@ -185,7 +192,8 @@ for dataset in tqdm(test_set_robot + test_set_human):
         plot_filename = f"aoa_array{b}_{safe_dataset_basename}.png"
         full_plot_path = os.path.join(plots_output_dir, plot_filename)
         
-        plt.savefig(full_plot_path)
+        #plt.savefig(full_plot_path)
+        plt.savefig(os.path.join(round_plots_dir, plot_filename))
         plt.close(fig)
         
 print(f"Plots for AoA Estimation saved to: {os.path.abspath(plots_output_dir)}")

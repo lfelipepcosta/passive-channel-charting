@@ -18,3 +18,5 @@ plots_*/
 
 experiment_logs/
 Arquivo/
+nan_check.py
+powers_check.py

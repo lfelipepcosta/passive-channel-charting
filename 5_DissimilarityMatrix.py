@@ -147,7 +147,7 @@ if __name__ == '__main__':
     "esprit": ("triangulation_estimates_ESPRIT", "aoa_estimates_ESPRIT"),
     "delay and sum": ("triangulation_estimates_DELAY_AND_SUM", "aoa_estimates_DAS"),
     "capon": ("triangulation_estimates_CAPON", "aoa_estimates_CAPON"),
-    "ss capon": ("triangulation_estimates_SSCAPON", "aoa_estimates_SSCAPON")
+    "ss capon": ("triangulation_estimates_SS_CAPON", "aoa_estimates_SSCAPON")
     }
 
     if len(sys.argv) > 1:

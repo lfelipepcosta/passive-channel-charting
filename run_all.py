@@ -11,7 +11,7 @@ ALGORITHMS = {
     "3": {"name": "ESPRIT", "script": "3_AoA_Estimation_ESPRIT.py", "arg_name": "esprit"},
     "4": {"name": "Delay and Sum", "script": "3_AoA_Estimation_DAS.py", "arg_name": "delay and sum"},
     "5": {"name": "Capon", "script": "3_AoA_Estimation_CAPON.py", "arg_name": "capon"},
-    "6": {"name": "SS Capon", "script": "3_AoA_Estimation_SSCapon.py", "arg_name": "sscapon"}
+    "6": {"name": "SS Capon", "script": "3_AoA_Estimation_SSCapon.py", "arg_name": "ss capon"}
 }
 
 def run_command(command, log_file=None):

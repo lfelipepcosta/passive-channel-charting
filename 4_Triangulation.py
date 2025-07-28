@@ -130,7 +130,7 @@ if __name__ == '__main__':
     "esprit": "aoa_estimates_ESPRIT",
     "delay and sum": "aoa_estimates_DAS",
     "capon": "aoa_estimates_CAPON",
-    "sscapon": "aoa_estimates_SSCAPON"
+    "ss capon": "aoa_estimates_SSCAPON"
     }
 
     if len(sys.argv) > 1:
@@ -144,7 +144,7 @@ if __name__ == '__main__':
         while True:
             prompt = ("\nChoose the AoA algorithm to use for the next steps:\n"
                     " -> Unitary Root-MUSIC\n -> MUSIC\n -> ESPRIT\n -> Delay and Sum\n"
-                    " -> Capon\n -> SSCapon\nYour choice: ")
+                    " -> Capon\n -> SS Capon\nYour choice: ")
             aoa_algorithm = input(prompt).lower().replace('-', ' ')
             if aoa_algorithm in aoa_algorithms_folders:
                 break

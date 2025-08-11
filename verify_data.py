@@ -3,14 +3,37 @@ import requests
 from tqdm import tqdm
 
 # Dictionary mapping filenames to their unique download IDs
-DATASET_FILES = {
+'''DATASET_FILES = {
     "espargos-0007-meanders-nw-se-1.tfrecords": "378515",
     "espargos-0007-meanders-sw-ne-1.tfrecords": "378516",
     "espargos-0007-randomwalk-1.tfrecords": "378514",
     "espargos-0007-randomwalk-2.tfrecords": "378518",
     "espargos-0007-human-helmet-randomwalk-1.tfrecords": "378523",
     "spec.json": "378510"
+}'''
+
+# All datasets from espargos-0007
+DATASET_FILES = {
+    "espargos-0007-meanders-nw-se-1.tfrecords": "378515",
+    "espargos-0007-meanders-sw-ne-1.tfrecords": "378516",
+    "espargos-0007-randomwalk-1.tfrecords": "378514",
+    "espargos-0007-randomwalk-2.tfrecords": "378518",
+    "espargos-0007-human-helmet-randomwalk-1.tfrecords": "378523",
+    "spec.json": "378510",
+    "espargos-0007-empty-room.tfrecords": "378511",
+    "espargos-0007-spiral-ccw-1-part1.tfrecords": "378512",
+    "espargos-0007-spiral-ccw-1-part2.tfrecords": "378513",
+    "espargos-0007-radial-1.tfrecords": "378517",
+    "espargos-0007-meanders-e-w-1.tfrecords": "378519",
+    "espargos-0007-spiral-ccw-2.tfrecords": "378520",
+    "espargos-0007-human-helmet-meanders-nw-se-1.tfrecords": "378521",
+    "espargos-0007-human-helmet-meanders-sw-ne-1.tfrecords": "378522",
+    "espargos-0007-human-helmet-standing-center-1.tfrecords": "378524",
+    "espargos-0007-human-helmet-circle-1.tfrecords": "378525",
+    "espargos-0007-circle-1.tfrecords": "378526",
+    
 }
+
 BASE_URL = "https://darus.uni-stuttgart.de/api/access/datafile/"
 
 def download_files(files_to_download, target_dir):

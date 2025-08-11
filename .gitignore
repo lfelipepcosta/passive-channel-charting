@@ -22,3 +22,8 @@ nan_check.py
 powers_check.py
 
 *.png
+Análise de energia/
+kpca_trained_models/
+kpca_trained_models_multikernel/
+kpca_evaluation_results_multikernel/
+kpca_evaluation_results/

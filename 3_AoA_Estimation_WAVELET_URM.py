@@ -12,31 +12,21 @@ import matplotlib.pyplot as plt
 import time
 import sys
 
-# Importa o seu novo módulo de denoising
 import WAVELET
 
-# =============================================================================
-# ===                      BLOCO DE CONFIGURAÇÃO DO EXPERIMENTO             ===
-# =============================================================================
-# Altere os parâmetros aqui para cada novo experimento.
-# Os nomes das pastas de resultados serão gerados automaticamente.
-
+# Experiment parameters
 WAVELET_FAMILY = 'db4'      # Ex: 'db4', 'sym8', 'coif5'
 DECOMPOSITION_LEVEL = 2     # Nível de decomposição (use 2 para evitar warnings)
 THRESHOLD_MODE = 'soft'     # Modo de thresholding: 'soft' ou 'hard'
 THRESHOLD_SCALE = 1.0       # Fator de escala para o threshold (1.0 = padrão)
 
-# Pega o número da rodada a partir do argumento da linha de comando
+# Get round number from command line (run_all script)
 round_num = sys.argv[1] if len(sys.argv) > 1 else '1'
-# =============================================================================
 
-
-# --- 1. Criação dinâmica dos nomes de diretório ---
-# Cria um nome descritivo para a pasta de resultados deste experimento
+# Create a descriptive name for the results folder for this experiment
 experiment_name = f"{WAVELET_FAMILY}_level{DECOMPOSITION_LEVEL}_{THRESHOLD_MODE}_scale{str(THRESHOLD_SCALE).replace('.', 'p')}"
-print(f"--- Iniciando Experimento: {experiment_name} ---")
+print(f"Starting: {experiment_name} ---")
 
-# Define os diretórios de saída para os resultados .npy e para os gráficos
 base_aoa_dir = "aoa_estimates_WAVELET_URM"
 base_plots_dir = "plots_3_AoA_Estimation_WAVELET_URM"
 
@@ -48,7 +38,7 @@ os.makedirs(output_aoa_dir, exist_ok=True)
 os.makedirs(round_plots_dir, exist_ok=True)
 
 
-# --- 2. Data Loading and Preprocessing (sem alterações) ---
+# Data Loading and Preprocessing
 training_set_robot = espargos_0007.load_dataset(espargos_0007.TRAINING_SET_ROBOT_FILES)
 test_set_robot = espargos_0007.load_dataset(espargos_0007.TEST_SET_ROBOT_FILES)
 test_set_human = espargos_0007.load_dataset(espargos_0007.TEST_SET_HUMAN_FILES)
@@ -61,7 +51,7 @@ for dataset in all_datasets:
     cluster_utils.cluster_dataset(dataset)
 
 
-# --- 3. Implementação do Unitary Root-MUSIC (sem alterações) ---
+# Unitary Root-MUSIC implementation
 def get_unitary_rootmusic_estimator(chunksize = 4, shed_coeff_ratio = 0):
     I = np.eye(chunksize // 2)
     J = np.flip(np.eye(chunksize // 2), axis = -1)
@@ -82,7 +72,7 @@ def get_unitary_rootmusic_estimator(chunksize = 4, shed_coeff_ratio = 0):
 umusic = get_unitary_rootmusic_estimator(4)
 
 
-# --- 4. Main AoA Estimation Loop ---
+# Main AoA Estimation Loop
 start_time = time.perf_counter()
 for dataset in tqdm(all_datasets):
     print(f"AoA estimation for dataset: {dataset['filename']}")
@@ -93,7 +83,7 @@ for dataset in tqdm(all_datasets):
         for tx_idx, csi in enumerate(cluster['csi_freq_domain']):
             noclutter_csi = CRAP.remove_clutter(csi, dataset['clutter_acquisitions'][tx_idx])
             
-            # Chama a função de denoising com os parâmetros definidos no início do script
+            # Denoising function
             denoised_csi = WAVELET.wavelet_denoise_csi(
                 noclutter_csi,
                 wavelet=WAVELET_FAMILY,
@@ -116,19 +106,18 @@ for dataset in tqdm(all_datasets):
 
 end_time = time.perf_counter()
 elapsed_time_total = end_time - start_time
-print(f"\n--- Tempo de Execução Total ({experiment_name}): {elapsed_time_total:.2f} segundos ---\n")
+print(f"\nTotal execution time ({experiment_name}): {elapsed_time_total:.2f} seconds \n")
 
 
-# --- 5. Save Results ---
+# Save Results
 for dataset in all_datasets:
     dataset_name = os.path.basename(dataset['filename'])
-    # Salva os resultados .npy na nova pasta de experimento
     np.save(os.path.join(output_aoa_dir, dataset_name + ".aoa_angles.npy"), np.asarray(dataset["cluster_aoa_angles"]))
     np.save(os.path.join(output_aoa_dir, dataset_name + ".aoa_powers.npy"), np.asarray(dataset["cluster_aoa_powers"]))
-print(f"Resultados de AoA salvos em: {os.path.abspath(output_aoa_dir)}")
+print(f"AoA results saved to: {os.path.abspath(output_aoa_dir)}")
 
 
-# --- 6. Evaluation and Visualization ---
+# Evaluation and Visualization
 for dataset in tqdm(test_set_robot + test_set_human):
     relative_pos = dataset['cluster_positions'][:,np.newaxis,:] - espargos_0007.array_positions
     normal = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_normalvectors)
@@ -156,8 +145,7 @@ for dataset in tqdm(test_set_robot + test_set_human):
         
         safe_dataset_basename = os.path.basename(dataset['filename']).replace(".tfrecords", "")
         plot_filename = f"wavelet_urm_aoa_array{b}_{safe_dataset_basename}.png"
-        # Salva os gráficos na nova pasta de experimento
         plt.savefig(os.path.join(round_plots_dir, plot_filename))
         plt.close(fig)
 
-print(f"Gráficos salvos em: {os.path.abspath(round_plots_dir)}")
+print(f"Plots saved to: {os.path.abspath(round_plots_dir)}")

@@ -180,11 +180,15 @@ for dataset in tqdm(test_set_robot + test_set_human):
         axes[2].set_xlabel("x coordinate in m")
         axes[2].set_ylabel("y coordinate in m")
 
-        # Add a colorbar to the figure
-        cbar_ax = fig.add_axes([1.00, 0.2, 0.02, 0.6])
-        fig.colorbar(im1, cax=cbar_ax)
+
+        # Add a colorbar to the figure.
+        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+        fig.colorbar(im1, cax=cbar_ax, label="Angle in Degrees")
         
-        plt.tight_layout()
+        # Adjust layout to make room for the colorbar
+        plt.tight_layout(rect=[0, 0, 0.9, 1])
+        
+        # plt.tight_layout()
         
         safe_dataset_basename = os.path.basename(dataset['filename']).replace(".tfrecords", "")
         

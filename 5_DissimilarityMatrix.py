@@ -12,6 +12,7 @@ from sklearn.neighbors import NearestNeighbors, kneighbors_graph
 from tqdm.auto import tqdm
 import scipy.special 
 import sys
+import time
 
 os.makedirs("dissimilarity_matrices", exist_ok=True)
 
@@ -286,6 +287,7 @@ if __name__ == '__main__':
 
     # Calculate Initial Dissimilarity (Cosine-based) using Multiprocessing
     print("Calculating ADP dissimilarity matrix...")
+    start_time = time.perf_counter()
     adp_dissimilarity_matrix = np.zeros((sample_count, sample_count), dtype = np.float32)
     todo_queue_adp = mp.Queue(); output_queue_adp = mp.Queue(); processes_adp = []
     num_cpus = mp.cpu_count()
@@ -321,6 +323,7 @@ if __name__ == '__main__':
     print("  Waiting for ADP workers to join...")
     for p in processes_adp: p.join(timeout=10); p.terminate() if p.is_alive() else None
     print("ADP dissimilarity matrix calculated.")
+
 
     plt.figure() 
     plt.hist(adp_dissimilarity_matrix.flatten(), bins = 100)
@@ -495,6 +498,10 @@ if __name__ == '__main__':
     output_filename = os.path.join(dissimilarity_matrices_dir, espargos_0007.hash_dataset_names(training_set) + ".geodesic_meters.npy")
     np.save(output_filename, dissimilarity_matrix_geodesic_meters)
     print(f"Geodesic dissimilarity matrix (in meters) saved to: {output_filename}")
+
+    end_time = time.perf_counter() # <--- FIM DO TIMER
+    elapsed_time = end_time - start_time
+    print(f"\n--- Total Time: {elapsed_time:.2f} seconds ---\n")
 
     plt.figure() 
     plt.imshow(dissimilarity_matrix_geodesic_meters)

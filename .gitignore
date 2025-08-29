@@ -15,6 +15,7 @@ clutter_channel_estimates/
 epoch_charts/
 evaluation_charts/
 plots_*/
+AoA_Estimation_Wavelets/
 
 experiment_logs/
 Arquivo/

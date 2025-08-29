@@ -4,6 +4,10 @@ import cluster_utils
 import numpy as np
 import CRAP
 import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import time
 import sys
 
@@ -25,13 +29,12 @@ print(f"--- Starting AoA Estimation for: {experiment_name} ---")
 
 main_output_folder = "AoA_Estimation_Wavelets"
 output_experiment_dir = os.path.join(main_output_folder, experiment_name)
-output_aoa_dir = os.path.join(output_experiment_dir, "estimates")
 
-# Não precisamos mais da pasta de plots
-# output_plots_dir = os.path.join(output_experiment_dir, "plots") 
+output_aoa_dir = os.path.join(output_experiment_dir, "estimates")
+output_plots_dir = os.path.join(output_experiment_dir, "plots") # Salva plots diretamente aqui
 
 os.makedirs(output_aoa_dir, exist_ok=True)
-# os.makedirs(output_plots_dir, exist_ok=True)
+os.makedirs(output_plots_dir, exist_ok=True)
 
 
 # --- 3. Data Loading and Preprocessing ---
@@ -103,7 +106,7 @@ elapsed_time_total = end_time - start_time
 print(f"\nExecution time for this run ({experiment_name}): {elapsed_time_total:.2f} seconds \n")
 
 
-# --- 6. Save AoA Estimates ---
+# --- 6. Save Results ---
 for dataset in all_datasets:
     dataset_name = os.path.basename(dataset['filename'])
     np.save(os.path.join(output_aoa_dir, dataset_name + ".aoa_angles.npy"), np.asarray(dataset["cluster_aoa_angles"]))
@@ -111,47 +114,35 @@ for dataset in all_datasets:
 print(f"AoA estimates saved to: {os.path.abspath(output_aoa_dir)}")
 
 
-# --- 7. Evaluation and Saving MAE to TXT ---
-# Lista para armazenar as linhas do arquivo de resultados
-mae_results_lines = []
-mae_results_lines.append(f"MAE Results for Experiment: {experiment_name}\n")
-mae_results_lines.append("-" * 50 + "\n")
-
-# Loop apenas nos datasets de teste para calcular o MAE
-for dataset in tqdm(test_set_robot + test_set_human, desc="Calculating MAE"):
-    # Calcula a verdade terrestre (ground truth)
+# --- 7. Evaluation and Visualization ---
+for dataset in tqdm(test_set_robot + test_set_human, desc=f"Generating plots for {experiment_name}"):
     relative_pos = dataset['cluster_positions'][:,np.newaxis,:] - espargos_0007.array_positions
     normal = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_normalvectors)
     right = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_rightvectors)
     ideal_aoas = np.arctan2(right, normal)
+    dataset['cluster_groundtruth_aoas'] = ideal_aoas
+    estimation_errors = dataset['cluster_aoa_angles'] - dataset['cluster_groundtruth_aoas']
     
-    # Calcula os erros de estimação
-    estimation_errors = dataset['cluster_aoa_angles'] - ideal_aoas
-    
-    # Extrai o nome base do dataset para identificação
-    safe_dataset_basename = os.path.basename(dataset['filename'])
-    
-    # Adiciona uma linha de identificação para o dataset atual
-    mae_results_lines.append(f"Dataset: {safe_dataset_basename}\n")
-
-    # Calcula e registra o MAE para cada antena (array)
+    norm = mcolors.Normalize(vmin=-45, vmax=45)
     for b in range(estimation_errors.shape[1]):
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
         valid_errors = estimation_errors[:,b][~np.isnan(estimation_errors[:,b])]
+        mae = np.mean(np.abs(np.rad2deg(valid_errors))) if valid_errors.size > 0 else float('nan')
+
+        axes[0].set_title(f"Wavelet+URM AoA Estimates from Array {b}")
+        axes[1].set_title(f"Ideal AoAs from Array {b}")
+        axes[2].set_title(f"Wavelet+URM AoA Error, MAE = {mae:.2f}°")
         
-        # Calcula o MAE se houver erros válidos, senão registra como NaN
-        if valid_errors.size > 0:
-            mae = np.mean(np.abs(np.rad2deg(valid_errors)))
-            mae_results_lines.append(f"  - Array {b}: MAE = {mae:.4f}°\n")
-        else:
-            mae_results_lines.append(f"  - Array {b}: MAE = NaN\n")
-    
-    mae_results_lines.append("\n") # Adiciona uma linha em branco para separar os datasets
+        im1 = axes[0].scatter(dataset["cluster_positions"][:,0], dataset["cluster_positions"][:,1], c = np.rad2deg(dataset["cluster_aoa_angles"][:,b]), norm = norm)
+        im2 = axes[1].scatter(dataset["cluster_positions"][:,0], dataset["cluster_positions"][:,1], c = np.rad2deg(dataset["cluster_groundtruth_aoas"][:,b]), norm = norm)
+        im3 = axes[2].scatter(dataset["cluster_positions"][:,0], dataset["cluster_positions"][:,1], c = np.rad2deg(estimation_errors[:,b]), norm = norm)
+        for ax in axes: ax.set_xlabel("x coordinate in m"); ax.set_ylabel("y coordinate in m")
+        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7]); fig.colorbar(im1, cax=cbar_ax, label="Angle in Degrees")
+        plt.tight_layout(rect=[0, 0, 0.9, 1])
+        
+        safe_dataset_basename = os.path.basename(dataset['filename']).replace(".tfrecords", "")
+        plot_filename = f"wavelet_urm_aoa_array{b}_{safe_dataset_basename}.png"
+        plt.savefig(os.path.join(output_plots_dir, plot_filename))
+        plt.close(fig)
 
-# Define o caminho do arquivo de resultados
-output_txt_path = os.path.join(output_experiment_dir, "mae_summary.txt")
-
-# Escreve todas as linhas coletadas no arquivo de texto
-with open(output_txt_path, 'w') as f:
-    f.writelines(mae_results_lines)
-
-print(f"MAE summary saved to: {os.path.abspath(output_txt_path)}")
+print(f"Plots saved to: {os.path.abspath(output_plots_dir)}")

@@ -7,4 +7,5 @@ RUN pip install --no-cache-dir \
     numpy \
     scipy \
     scikit-learn \
-    matplotlib
+    matplotlib \
+    PyWavelets

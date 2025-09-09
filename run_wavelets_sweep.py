@@ -2,19 +2,27 @@ import os
 import subprocess
 from itertools import product
 
-PARAM_GRID = {
-    'wavelet_family': [
-        'db2', 'db4', 'db8',         # Daubechies de ordens diferentes
-        'sym4', 'sym8',              # Symlets (mais simétricas)
-        'coif2', 'coif5',            # Coiflets
-        'bior2.2', 'bior3.7'         # Biorthogonais (simétricas, boas para denoising)
-    ],
-    'decomposition_level': [1, 2, 3],  # O script irá pular combinações inválidas
+''' PARAM_GRID = {
+    'wavelet_family': ['db2', 'db4', 'db8', 'sym4', 'sym8', 'coif2', 'coif5', 'bior2.2', 'bior3.7'],
+    'decomposition_level': [1, 2, 3],
     'threshold_mode': ['soft', 'hard'],
     'threshold_scale': [0.6, 0.8, 1.0, 1.2, 1.4]
+}'''
+
+PARAM_GRID = {
+    'wavelet_family': ['sym4'],
+    'decomposition_level': [1, 2, 3],
+    'threshold_mode': ['hard', 'soft'],
+    'threshold_scale': [0.8, 1.0, 1.2, 1.4]
 }
 
-
+# Próximo conjunto de parâmetros a serem testados
+'''PARAM_GRID = {
+    'wavelet_family': ['coif5'],
+    'decomposition_level': [1, 2, 3],
+    'threshold_mode': ['hard', 'soft'],
+    'threshold_scale': [0.8, 1.0, 1.2, 1.4]
+}'''
 
 def check_valid_level(wavelet, level, signal_length=53):
     """

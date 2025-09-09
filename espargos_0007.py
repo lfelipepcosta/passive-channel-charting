@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 
-DATASET_DIR = "espargos-0007"               # Directory where espargos-0007 dataset is stored
+DATASET_DIR = "/home/luiz.costa/anatel_data/luiz.costa/espargos_0007"               # Directory where espargos-0007 dataset is stored
 MAC_PREFIX = bytes([0x0a, 0xee, 0xf5])      # MAC address prefix to identify the specific Wi-Fi transmitters used in the experiment   
 
 # Lists to store the geometric properties of each antenna array

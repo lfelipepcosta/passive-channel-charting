@@ -27,7 +27,6 @@ main_output_folder = "AoA_Estimation_Wavelets"
 output_experiment_dir = os.path.join(main_output_folder, experiment_name)
 output_aoa_dir = os.path.join(output_experiment_dir, "estimates")
 
-# Não precisamos mais da pasta de plots
 # output_plots_dir = os.path.join(output_experiment_dir, "plots") 
 
 os.makedirs(output_aoa_dir, exist_ok=True)
@@ -112,14 +111,13 @@ print(f"AoA estimates saved to: {os.path.abspath(output_aoa_dir)}")
 
 
 # --- 7. Evaluation and Saving MAE to TXT ---
-# Lista para armazenar as linhas do arquivo de resultados
 mae_results_lines = []
 mae_results_lines.append(f"MAE Results for Experiment: {experiment_name}\n")
 mae_results_lines.append("-" * 50 + "\n")
+mae_results_lines.append(f"Total Execution Time: {elapsed_time_total:.2f} seconds\n\n")
 
-# Loop apenas nos datasets de teste para calcular o MAE
+
 for dataset in tqdm(test_set_robot + test_set_human, desc="Calculating MAE"):
-    # Calcula a verdade terrestre (ground truth)
     relative_pos = dataset['cluster_positions'][:,np.newaxis,:] - espargos_0007.array_positions
     normal = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_normalvectors)
     right = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_rightvectors)

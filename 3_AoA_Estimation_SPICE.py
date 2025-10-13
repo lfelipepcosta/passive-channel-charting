@@ -63,6 +63,8 @@ for dataset in tqdm(all_datasets):
         # 3. Define the physical spacing 'd' based on the half-wavelength rule
         ANTENNA_SPACING_METERS = min_wavelength / 2.0
 
+        # NOTE: The center frequency is still used inside the steering vector calculation,
+        # which is standard practice. The important part is that 'd' is defined correctly.
         CENTER_FREQUENCY_HZ = 2.472e9
         
         spice_angles_for_cluster = []
@@ -104,19 +106,17 @@ end_time = time.perf_counter()
 elapsed_time_spice = end_time - start_time
 print(f"\n--- Total Execution Time (SPICE): {elapsed_time_spice:.2f} seconds ---\n")
 
-# --- 3. Save Results ---
+# --- 3. Save Intermediate Results ---
 for dataset in all_datasets:
     dataset_name = os.path.basename(dataset['filename'])
     np.save(os.path.join("aoa_estimates_SPICE", dataset_name + ".aoa_angles.npy"), np.asarray(dataset["cluster_aoa_angles"]))
     np.save(os.path.join("aoa_estimates_SPICE", dataset_name + ".aoa_powers.npy"), np.asarray(dataset["cluster_aoa_powers"]))
 
 # --- 4. Evaluation and Results Summary ---
-# Create the directory for the summary file, which will be inside the 'plots' folder
-# to maintain consistency with the original structure.
+# Create the directory for the summary file.
 plots_output_dir = "plots_3_AoA_Estimation_SPICE" 
 round_plots_dir = os.path.join(plots_output_dir, f"Round_{round_num}")
 os.makedirs(round_plots_dir, exist_ok=True)
-os.makedirs(plots_output_dir, exist_ok=True)
 
 # This list will hold all the lines of text for the final output file.
 mae_results_lines = []

@@ -45,7 +45,7 @@ for dataset in tqdm(all_datasets):
         for tx_csi in csi_by_transmitter_noclutter:
             R = R + np.einsum("dbrms,dbrns->bmn", tx_csi, np.conj(tx_csi)) / tx_csi.shape[0]
         
-        # --- Define physical parameters required by SPICE (Corrected) ---
+        # Define physical parameters required by SPICE
         num_antennas_per_array = espargos_0007.COL_COUNT
         num_sources = 1 # We assume a single target
         SPEED_OF_LIGHT = 3e8
@@ -63,7 +63,7 @@ for dataset in tqdm(all_datasets):
         # 3. Define the physical spacing 'd' based on the half-wavelength rule
         ANTENNA_SPACING_METERS = min_wavelength / 2.0
 
-        # NOTE: The center frequency is still used inside the steering vector calculation,
+        # The center frequency is still used inside the steering vector calculation,
         # which is standard practice. The important part is that 'd' is defined correctly.
         CENTER_FREQUENCY_HZ = 2.472e9
         

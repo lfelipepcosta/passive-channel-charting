@@ -41,16 +41,30 @@ def estimate_spice_from_R(R_hat, M, d, c, f_c, num_peaks=1):
     # We use sqrtm for the matrix square root.
     R_hat_sqrt = sqrtm(R_hat_reg) # Cálculo da raiz quadrada matricial (pré processamento para SPICE)
 
+    # Cálculo do termo de normalização omega
+    R_hat_inv = inv(R_hat_reg) # Cálculo da inversa da matriz de covariância medida
+    
+    # Usamos 'einsum' para calcular eficientemente a^H * R_hat_inv * a para todos os ângulos
+    # Isso corresponde ao espectro Capon
+    # O .real é usado porque, teoricamente, este valor de potência deve ser real
+    omega_spectrum = np.real(np.einsum('ij,ji->i', A.conj().T, R_hat_inv @ A))
+    
+    # Dividimos por M conforme a fórmula do artigo para obter omega
+    omega = omega_spectrum / M
+    
+    # Calculamos a raiz quadrada de omega, adicionando um pequeno valor para evitar divisão por zero
+    omega_sqrt = np.sqrt(omega + 1e-9)
+
     # 2. Initialization
     # Initialize powers using a simple beamformer output for faster convergence
     initial_beamformer_spectrum = np.einsum('ij,ji->i', A.conj().T, R_hat_reg @ A) # Cálculo da potência inicial com um DAS (calculando a potência para todas as direções)
     # Fórmula acima: p(theta) = a(theta)ˆH R_chapeu a(theta)
-    p = np.abs(initial_beamformer_spectrum) # Converte o valor real para potência (magnitude), garantindo um valor real e positivo
+    p = np.abs(initial_beamformer_spectrum) # Converte o resultado (que pode ser complexo) para potência (magnitude), garantindo um valor real e positivo
     
     max_iter = 100
     tol = 1e-6
 
-    # 3. Main SPICE Iteration Loop
+    '''# 3. Main SPICE Iteration Loop
     for i in range(max_iter):
         p_old = p.copy() # Guarda a estimativa de potência atual para comparar no final da iteração
 
@@ -69,7 +83,10 @@ def estimate_spice_from_R(R_hat, M, d, c, f_c, num_peaks=1):
         update_factor = norm(update_matrix, axis=1) # Cálculo da norma de cada direção em um único número de "força" (quanto maior, maior a evidência de um sinal inexplicado vindo daquela direção)
         
         # The update is multiplicative
-        p = p_old * update_factor # Multiplicação elemento a elemento para evidenciar os ângulos com mais "força" (passo de aprendizado)
+        #p = p_old * update_factor # Multiplicação elemento a elemento para evidenciar os ângulos com mais "força" (passo de aprendizado)
+        
+        # A atualização da potência
+        p = p_old * update_factor / omega_sqrt
         
         # Normalization (optional, but helps with stability)
         if np.sum(p) > 0:
@@ -78,6 +95,45 @@ def estimate_spice_from_R(R_hat, M, d, c, f_c, num_peaks=1):
         # Check for convergence
         if norm(p - p_old) < tol * norm(p_old): # Se a mudança nas potências for menor que a tolerância, ou seja, praticamente não mudar, o algoritmo encerra
             # print(f"Converged after {i+1} iterations.")
+            break'''
+        
+    # 3. Main SPICE Iteration Loop
+    for i in range(max_iter):
+        p_old = p.copy()
+
+        noise_power = np.mean(p) * 1e-4
+        R_model = A @ np.diag(p) @ A.conj().T + noise_power * np.eye(M)
+        R_model_inv = inv(R_model)
+
+        update_matrix = A.conj().T @ R_model_inv @ R_hat_sqrt
+        update_factor = norm(update_matrix, axis=1)
+        
+        # Pré-cálculo do termo de atualização não normalizado
+        p_unnormalized = p_old * update_factor / omega_sqrt # Cálculo da potência intermediária, multiplicando a potência antiga pelo fator de atualização e dividindo pelo seu peso 
+        
+        # Cálculo do termo de normalização global rho(i) - Equação (15)
+        # Primeira parte da soma em rho(i): relacionada aos sinais
+        # É a soma de (omega_k^1/2 * p_k * ||...||)
+        rho_signal_part = np.sum(omega_sqrt * p_old * update_factor)
+        
+        # Segunda parte de rho(i): relacionada ao ruído.
+        # Aproximação do termo gamma do artigo
+        gamma = np.trace(R_hat_inv).real / M # Relacionado ao ruído
+        noise_norm_term = norm(R_model_inv @ R_hat_sqrt) # O quanto a "evidência inexplicada" se parece com ruído
+        rho_noise_part = np.sqrt(gamma) * noise_power * noise_norm_term # Contribuição do ruído para a normalização
+        
+        # rho(i) é a soma das duas partes - "evidência total do sinal" + "evidência total do ruído"
+        rho_i = rho_signal_part + rho_noise_part
+        
+        # Adiciona-se um pequeno valor a rho_i para evitar divisão por zero
+        p = p_unnormalized / (rho_i + 1e-9)
+
+        # A normalização anterior foi removida:
+        # if np.sum(p) > 0:
+        #     p = p / np.sum(p)
+
+        # Check for convergence
+        if norm(p - p_old) < tol * norm(p_old):
             break
 
     # 4. Find peaks in the final power spectrum

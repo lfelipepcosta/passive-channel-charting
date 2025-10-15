@@ -194,7 +194,7 @@ for dataset in tqdm(all_datasets):
                     # Recombine the real and imaginary parts to form the processed vector
                     processed_vector_for_single_array = real_part_reconstructed + 1j * imag_part_reconstructed
 
-                    temp_reshaped = reshaped_vector_for_single_array.reshape(num_subcarriers_after_drop, num_rows, num_antennas_per_array)  # .shape = (53, 2, 4)
+                    temp_reshaped = processed_vector_for_single_array.reshape(num_subcarriers_after_drop, num_rows, num_antennas_per_array)  # .shape = (53, 2, 4)
 
                     processed_csi_for_single_array = np.transpose(temp_reshaped, (1, 2, 0)) # .shape = (2, 4, 53)
                     

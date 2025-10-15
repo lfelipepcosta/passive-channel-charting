@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import time
 import sys
 
+DEBUG = False
+
 # Data Loading and Preprocessing
 
 # Loading all the datasets can take some time...
@@ -41,26 +43,59 @@ for dataset in tqdm(all_datasets):
         for tx_idx, csi in enumerate(cluster['csi_freq_domain']):
             csi_by_transmitter_noclutter.append(CRAP.remove_clutter(csi, dataset['clutter_acquisitions'][tx_idx]))
 
+        if DEBUG:
+            # Print how many CSI tensors (one per transmitter) we have in this cluster.
+            print(f"\n[DEBUG] Cluster contains {len(csi_by_transmitter_noclutter)} CSI tensors (one per transmitter).")
+
+
         # Calculate the spatial covariance matrix R for each of the 4 receiver arrays
         R_old = np.zeros((espargos_0007.ARRAY_COUNT, espargos_0007.COL_COUNT, espargos_0007.COL_COUNT), dtype = np.float32)
         R = np.zeros((espargos_0007.ARRAY_COUNT, espargos_0007.COL_COUNT, espargos_0007.COL_COUNT), dtype = np.float32)
 
         for tx_csi in csi_by_transmitter_noclutter:
+
+            # tx_csi é um tensor do NumPy com 5 dimensões (snapshot, array, linha, coluna, subportadora) 
+
+            if DEBUG:
+                print(f"[DEBUG] Shape of 'tx_csi' tensor: {tx_csi.shape}")
+                print(f"[DEBUG] Value of one signal element: {tx_csi[0, 0, 0, 0, 0]}")
+
             # Average the covariance matrices from all transmitters
-            #print("Sinal1" + str(tx_csi.shape))
-            #print("Sinal2", tx_csi[0, 0, 0, 0, 0])
             R_old = R_old + np.float32(np.einsum("dbrms,dbrns->bmn", tx_csi, np.conj(tx_csi)) / tx_csi.shape[0])
-            # Snapshot, array, linha, coluna (antenas), subportadora
-            for snapshot_i in range(tx_csi.shape[0]):
-                for array_i in range(tx_csi.shape[1]):
+
+            (num_snapshots, num_arrays, num_rows, num_antennas_per_array, num_subcarriers) = tx_csi.shape
+
+            for snapshot_i in range(num_snapshots):
+                for array_i in range(num_arrays):
                     # Fazer o reshape a partir daqui para esses 4 vetores (tem que considerar que tem que fazer a matriz de correlação)
                     # Com o vetor grande aplicar a PCA.transform, selecionar os componentes de maior energia, aplicar PCA.transform_inverse
-                    for linha_i in range(tx_csi.shape[2]):
-                        for antena_i in range(tx_csi.shape[3]):
-                            for antena_j in range(tx_csi.shape[3]):
-                                for subportadora_i in range(tx_csi.shape[4]):
-                                    sinal_bruto_i = tx_csi[snapshot_i, array_i, linha_i, antena_i, subportadora_i] # Criar um vetor por array (4 vetores) a partir daqui para aplicação da PCA/KPCA a nível de antenas
-                                    sinal_bruto_j = tx_csi[snapshot_i, array_i, linha_i, antena_j, subportadora_i]
-                                    R[array_i, antena_i, antena_j] = R[array_i, antena_i, antena_j] + np.float32(sinal_bruto_i * np.conj(sinal_bruto_j) / tx_csi.shape[0])
 
-            print("R_old - R: ", np.sum(R_old - R))
+                    # Slice the tensor to get data for the current snapshot and array
+                    csi_for_single_array_snapshot = tx_csi[snapshot_i, array_i, :, :, :]
+                    
+                    # Flatten the 3D tensor into a 1D vector for preprocessing.
+                    flattened_vector = csi_for_single_array_snapshot.flatten()
+
+                    # PLACEHOLDER
+                    processed_vector = flattened_vector 
+                    
+                    # Reshape the processed vector back to its original 3D shape.
+                    reshaped_csi = processed_vector.reshape(num_rows, num_antennas_per_array, num_subcarriers)
+                    
+                    if DEBUG:
+                        print(f"[DEBUG] Snapshot {snapshot_i}, Array {array_i}:")
+                        print(f"[DEBUG]   - Shape before flattening: {csi_for_single_array_snapshot.shape}")
+                        print(f"[DEBUG]   - Shape after flattening:  {flattened_vector.shape}")
+                        print(f"[DEBUG]   - Shape after reshaping:   {reshaped_csi.shape}\n")
+
+                    for row_i in range(num_rows):
+                        for antenna_i in range(num_antennas_per_array):
+                            for antenna_j in range(num_antennas_per_array):
+                                for subcarrier_i in range(num_subcarriers):
+                                    raw_signal_i = reshaped_csi[row_i, antenna_i, subcarrier_i] # Criar um vetor por array (4 vetores) a partir daqui para aplicação da PCA/KPCA a nível de antenas
+                                    raw_signal_j = reshaped_csi[row_i, antenna_j, subcarrier_i]
+                                    R[array_i, antenna_i, antenna_j] = R[array_i, antenna_i, antenna_j] + np.float32(raw_signal_i * np.conj(raw_signal_j) / num_snapshots)
+            print_difference = True
+            if print_difference:
+                difference = np.sum(R_old - R)
+                print(f"[DEBUG] Sum of the difference between R_old and R: {difference}\n")

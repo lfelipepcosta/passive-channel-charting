@@ -138,7 +138,6 @@ for dataset in tqdm(all_datasets):
                                     single_array_raw_signal_j = processed_csi_for_single_array[row_i, antenna_j, subcarrier_i]
                                     R_array[array_i, antenna_i, antenna_j] = R_array[array_i, antenna_i, antenna_j] + np.float32(single_array_raw_signal_i * np.conj(single_array_raw_signal_j) / num_snapshots)
            
-            print_difference = True
-            if print_difference:
+            if DEBUG:
                 difference_array = np.sum(R_old - R_array)
                 print(f"[DEBUG] Sum of the difference between R_old and R_array: {difference_array}\n")

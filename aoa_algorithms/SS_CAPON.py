@@ -1,6 +1,4 @@
-# SS_CAPON.py
 import numpy as np
-# We import our existing CAPON module to reuse its code.
 import CAPON
 
 def estimate_ss_capon(R, M, m, d, c, f_c, num_peaks=1):

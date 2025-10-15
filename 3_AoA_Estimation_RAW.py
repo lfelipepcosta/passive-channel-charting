@@ -33,6 +33,8 @@ os.makedirs("aoa_estimates", exist_ok=True)
 for dataset in all_datasets:
     cluster_utils.cluster_dataset(dataset)
 
+os.makedirs("subcarrieres_power_plots", exist_ok=True)
+
 for dataset in tqdm(all_datasets):
     print(f"AoA estimation for dataset: {dataset['filename']}")
 
@@ -68,6 +70,7 @@ for dataset in tqdm(all_datasets):
             for snapshot_i in range(num_snapshots):
 
                 for array_i in range(num_arrays):
+
                     # Fazer o reshape a partir daqui para esses 4 vetores (tem que considerar que tem que fazer a matriz de correlação)
                     # Com o vetor grande aplicar a PCA.transform, selecionar os componentes de maior energia, aplicar PCA.transform_inverse
 
@@ -79,7 +82,39 @@ for dataset in tqdm(all_datasets):
                     # Reshape the 3D tensor into a 2D matrix for preprocessing
                     reshaped_vector_for_single_array = transposed_csi_for_single_array_snapshot.reshape(num_subcarriers, num_rows * num_antennas_per_array) # .shape = (53, 8)
 
+                    PLOT_SUBCARRIER_POWER = True
+                    if PLOT_SUBCARRIER_POWER and snapshot_i < 5:
+                        power_snapshot = np.abs(csi_for_single_array_snapshot)**2
+                        mean_power_per_subcarrier = np.mean(power_snapshot, axis=(0, 1))
+                        
+                        plt.figure(figsize=(12, 6))
+                        plt.plot(np.arange(num_subcarriers), 10 * np.log10(mean_power_per_subcarrier))
+                        plt.title(f'Mean Power per Subcarrier (Array {array_i}, Snapshot {snapshot_i})')
+                        plt.xlabel('Subcarrier Index')
+                        plt.ylabel('Mean Power (dB)')
+                        plt.grid(True)
+                        plt.xticks(np.arange(0, num_subcarriers, 2))
+                        
+                        plots_output_dir = "subcarrieres_power_plots"
+                        plot_filename = f"subcarrier_power_plot_array_{array_i}_snapshot_{snapshot_i}.png"
+
+                        full_plot_path = os.path.join(plots_output_dir, plot_filename)
+                        
+                        plt.savefig(full_plot_path)
+                        plt.close()
+
                     # Aplicar pré processamento em cima do vetor por array após o reshape
+                    DROP_SUBCARRIERS = False
+                    SUBCARRIERS_TO_DROP = [26] 
+
+                    if DROP_SUBCARRIERS and len(SUBCARRIERS_TO_DROP) > 0:
+                        num_subcarriers_pre_drop = num_subcarriers
+
+                        # np.delete deletes all rows specified in the list
+                        vector_after_drop = np.delete(reshaped_vector_for_single_array, SUBCARRIERS_TO_DROP, axis=0)
+                        reshaped_vector_for_single_array = vector_after_drop
+
+                        num_subcarriers = num_subcarriers_pre_drop - len(SUBCARRIERS_TO_DROP)
 
                     # PLACEHOLDER
                     processed_vector_for_single_array = reshaped_vector_for_single_array  # .shape = (53, 8)

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import time
 import sys
 
-import SS_CAPON
+from aoa_algorithms import SS_CAPON
 
 # Pega o número da rodada a partir do argumento da linha de comando
 # Se nenhum argumento for passado, assume a rodada 1 como padrão.

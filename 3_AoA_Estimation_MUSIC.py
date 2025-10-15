@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import time
 import sys
 
-import MUSIC
+from aoa_algorithms import MUSIC
 
 # Pega o número da rodada a partir do argumento da linha de comando
 # Se nenhum argumento for passado, assume a rodada 1 como padrão.

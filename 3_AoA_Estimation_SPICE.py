@@ -72,6 +72,7 @@ for dataset in tqdm(all_datasets):
 
         for array_idx in range(R.shape[0]):
             covariance_matrix_for_array = R[array_idx]
+            print("Shape da matriz de cov: "+ str(covariance_matrix_for_array.shape))
             
             try:
                 # --- This is where we call our SPICE function ---

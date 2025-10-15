@@ -101,7 +101,7 @@ def estimate_spice_from_R(R_hat, M, d, c, f_c, num_peaks=1):
     for i in range(max_iter):
         p_old = p.copy()
 
-        noise_power = np.mean(p) * 1e-4
+        noise_power = np.mean(p)
         R_model = A @ np.diag(p) @ A.conj().T + noise_power * np.eye(M)
         R_model_inv = inv(R_model)
 

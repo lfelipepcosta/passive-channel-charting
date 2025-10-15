@@ -15,7 +15,7 @@ import sys
 # Se nenhum argumento for passado, assume a rodada 1 como padrão.
 round_num = sys.argv[1] if len(sys.argv) > 1 else '1'
 
-import ESPRIT
+from aoa_algorithms import ESPRIT
 
 print("--- Running AoA Estimation with ESPRIT Implementation ---")
 

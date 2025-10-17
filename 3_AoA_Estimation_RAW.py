@@ -13,6 +13,9 @@ import sys
 
 from sklearn.decomposition import PCA
 
+# Get the round number from the command-line arguments
+round_num = sys.argv[1] if len(sys.argv) > 1 else '1'
+
 DEBUG = False
 
 # Data Loading and Preprocessing
@@ -30,6 +33,7 @@ for dataset in all_datasets:
 
 # Create a directory to store the output AoA estimates
 os.makedirs("aoa_estimates", exist_ok=True)
+os.makedirs("aoa_estimates_PCA", exist_ok=True)
 
 # Group the data into temporal clusters
 for dataset in all_datasets:
@@ -92,8 +96,13 @@ umusic = get_unitary_rootmusic_estimator(4)
 
 os.makedirs("subcarrieres_power_plots", exist_ok=True)
 
+start_time = time.perf_counter()
 for dataset in tqdm(all_datasets):
     print(f"AoA estimation for dataset: {dataset['filename']}")
+
+    # Initialize lists to store results for each cluster
+    dataset['cluster_aoa_angles'] = []
+    dataset['cluster_aoa_powers'] = []
 
     # Iterate through each cluster
     for cluster in tqdm(dataset['clusters']):
@@ -172,6 +181,7 @@ for dataset in tqdm(all_datasets):
 
                         num_subcarriers_after_drop = num_subcarriers - len(SUBCARRIERS_TO_DROP)
 
+                    # Usar um modelo pra parte real e outro pra parte imaginária
                     # Create the PCA object.
                     pca_model = PCA(n_components=0.90) # Passing a float (0.0 to 1.0) tells PCA to select the number of components needed to explain that percentage of the variance (0.90 means "keep 90% of the energy")
 
@@ -184,7 +194,7 @@ for dataset in tqdm(all_datasets):
 
                     # Apply PCA to the real part
                     real_part_transformed = pca_model.fit_transform(real_part)
-                    # Para saber quantos componentes foram escolhidos: print(pca_model.n_components_)
+                    # Para saber quantos componentes foram escolhidos: print(pca_model.n_components_); pca_model.single_values_ dá a energia
                     real_part_reconstructed = pca_model.inverse_transform(real_part_transformed)
 
                     # Apply PCA to the imaginary part
@@ -216,3 +226,77 @@ for dataset in tqdm(all_datasets):
             if DEBUG:
                 difference_array = np.sum(R_old - R_array)
                 print(f"[DEBUG] Sum of the difference between R_old and R_array: {difference_array}\n")
+
+        # Apply the MUSIC algorithm to each of the 4 receiver arrays' covariance matrices
+        music_results = [umusic(R_array[array]) for array in range(R_array.shape[0])]
+
+        # Convert the electrical angle from MUSIC to a physical AoA in radians and store it
+        dataset['cluster_aoa_angles'].append(np.asarray([np.arcsin(angle_power[0] / np.pi) for angle_power in music_results]))
+        dataset['cluster_aoa_powers'].append(np.asarray([angle_power[1] for angle_power in music_results]))
+
+    # Convert result lists to NumPy arrays
+    dataset['cluster_aoa_angles'] = np.asarray(dataset['cluster_aoa_angles'])
+    dataset['cluster_aoa_powers'] = np.asarray(dataset['cluster_aoa_powers'])
+
+end_time = time.perf_counter()
+elapsed_time_music = end_time - start_time
+print(f"Total Execution Time: {elapsed_time_music:.2f} seconds\n\n")
+
+# --- 3. Save Intermediate Results ---
+for dataset in all_datasets:
+    dataset_name = os.path.basename(dataset['filename'])
+    np.save(os.path.join("aoa_estimates_PCA", dataset_name + ".aoa_angles.npy"), np.asarray(dataset["cluster_aoa_angles"]))
+    np.save(os.path.join("aoa_estimates_PCA", dataset_name + ".aoa_powers.npy"), np.asarray(dataset["cluster_aoa_powers"]))
+
+# --- 4. Evaluation and Results Summary ---
+# Create the directory for the summary file.
+plots_output_dir = "plots_3_AoA_Estimation_RAW_PCA" 
+round_plots_dir = os.path.join(plots_output_dir, f"Round_{round_num}")
+os.makedirs(plots_output_dir, exist_ok=True)
+os.makedirs(round_plots_dir, exist_ok=True)
+
+
+# This list will hold all the lines of text for the final output file.
+mae_results_lines = []
+mae_results_lines.append(f"Total Execution Time: {elapsed_time_music:.2f} seconds\n\n")
+
+# Loop through only the test datasets to calculate MAE.
+for dataset in tqdm(test_set_robot + test_set_human, desc="Calculating MAE for Summary"):
+    
+    # Add the dataset filename to our summary list.
+    dataset_name = os.path.basename(dataset['filename'])
+    mae_results_lines.append(f"Dataset: {dataset_name}\n")
+    
+    # Calculate ideal AoAs (ground truth) for comparison.
+    relative_pos = dataset['cluster_positions'][:,np.newaxis,:] - espargos_0007.array_positions
+    normal = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_normalvectors)
+    right = np.einsum("dax,ax->da", relative_pos, espargos_0007.array_rightvectors)
+    ideal_aoas = np.arctan2(right, normal)
+    
+    # Calculate the estimation errors.
+    estimation_errors = dataset['cluster_aoa_angles'] - ideal_aoas
+    
+    # Loop through each of the 4 arrays to calculate and record its MAE.
+    for b in range(estimation_errors.shape[1]):
+        # Filter out NaN values that might result from failed estimations.
+        valid_errors = estimation_errors[:,b][~np.isnan(estimation_errors[:,b])]
+        
+        # Calculate MAE in degrees if there are valid error values.
+        if valid_errors.size > 0:
+            mae = np.mean(np.abs(np.rad2deg(valid_errors)))
+            mae_results_lines.append(f"  - Array {b}: MAE = {mae:.4f}°\n")
+        else:
+            # If all estimates for an array failed, record it as NaN.
+            mae_results_lines.append(f"  - Array {b}: MAE = NaN\n")
+    
+    # Add a blank line between datasets for readability.
+    mae_results_lines.append("\n")
+
+# Define the path for the output summary file.
+output_txt_path = os.path.join(round_plots_dir, "raw_pca_mae_summary.txt")
+
+# Write all the collected lines to the summary file.
+with open(output_txt_path, 'w') as f:
+    f.writelines(mae_results_lines)
+
+print(f"RAW data with PCA MAE summary saved to: {os.path.abspath(output_txt_path)}")

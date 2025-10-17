@@ -96,6 +96,13 @@ umusic = get_unitary_rootmusic_estimator(4)
 
 os.makedirs("subcarrieres_power_plots", exist_ok=True)
 
+n_components_real_list = []
+n_components_imag_list = []
+energy_ratio_real_list = []
+energy_ratio_imag_list = []
+singular_values_real_list = []
+singular_values_imag_list = []
+
 start_time = time.perf_counter()
 for dataset in tqdm(all_datasets):
     print(f"AoA estimation for dataset: {dataset['filename']}")
@@ -183,7 +190,7 @@ for dataset in tqdm(all_datasets):
 
                     # Usar um modelo pra parte real e outro pra parte imaginária
                     # Create the PCA object.
-                    pca_model = PCA(n_components=0.90) # Passing a float (0.0 to 1.0) tells PCA to select the number of components needed to explain that percentage of the variance (0.90 means "keep 90% of the energy")
+                    # pca_model = PCA(n_components=0.90) # Passing a float (0.0 to 1.0) tells PCA to select the number of components needed to explain that percentage of the variance (0.90 means "keep 90% of the energy")
 
                     # scikit-learn's PCA does not natively support complex numbers.
                     # The standard approach is to process the real and imaginary parts separately.
@@ -193,13 +200,26 @@ for dataset in tqdm(all_datasets):
                     imag_part = np.imag(reshaped_vector_for_single_array)
 
                     # Apply PCA to the real part
-                    real_part_transformed = pca_model.fit_transform(real_part)
-                    # Para saber quantos componentes foram escolhidos: print(pca_model.n_components_); pca_model.single_values_ dá a energia
-                    real_part_reconstructed = pca_model.inverse_transform(real_part_transformed)
+                    pca_model_real = PCA(n_components=0.90)
+                    real_part_transformed = pca_model_real.fit_transform(real_part)
+                    real_part_reconstructed = pca_model_real.inverse_transform(real_part_transformed)
 
                     # Apply PCA to the imaginary part
-                    imag_part_transformed = pca_model.fit_transform(imag_part)
-                    imag_part_reconstructed = pca_model.inverse_transform(imag_part_transformed)
+                    pca_model_imag = PCA(n_components=0.90)
+                    imag_part_transformed = pca_model_imag.fit_transform(imag_part)
+                    imag_part_reconstructed = pca_model_imag.inverse_transform(imag_part_transformed)
+
+                    # Captura as estatísticas após o 'fit' de cada modelo
+                    n_components_real_list.append(pca_model_real.n_components_)
+                    n_components_imag_list.append(pca_model_imag.n_components_)
+                    energy_ratio_real_list.append(np.sum(pca_model_real.explained_variance_ratio_))
+                    energy_ratio_imag_list.append(np.sum(pca_model_imag.explained_variance_ratio_))
+                    
+                    # Captura a média dos valores singulares para esta iteração
+                    if pca_model_real.singular_values_.size > 0:
+                        singular_values_real_list.append(np.mean(pca_model_real.singular_values_))
+                    if pca_model_imag.singular_values_.size > 0:
+                        singular_values_imag_list.append(np.mean(pca_model_imag.singular_values_))
                     
                     # Recombine the real and imaginary parts to form the processed vector
                     processed_vector_for_single_array = real_part_reconstructed + 1j * imag_part_reconstructed
@@ -242,6 +262,7 @@ end_time = time.perf_counter()
 elapsed_time_music = end_time - start_time
 print(f"Total Execution Time: {elapsed_time_music:.2f} seconds\n\n")
 
+
 # --- 3. Save Intermediate Results ---
 for dataset in all_datasets:
     dataset_name = os.path.basename(dataset['filename'])
@@ -255,10 +276,36 @@ round_plots_dir = os.path.join(plots_output_dir, f"Round_{round_num}")
 os.makedirs(plots_output_dir, exist_ok=True)
 os.makedirs(round_plots_dir, exist_ok=True)
 
-
 # This list will hold all the lines of text for the final output file.
 mae_results_lines = []
 mae_results_lines.append(f"Total Execution Time: {elapsed_time_music:.2f} seconds\n\n")
+
+# Add PCA statistics summary to the log file
+mae_results_lines.append("--- PCA Statistics Summary ---\n")
+
+if n_components_real_list:
+    mae_results_lines.append("\n[REAL Part Components]\n")
+    mae_results_lines.append(f"  - Average components used (n_components_): {np.mean(n_components_real_list):.2f}\n")
+    mae_results_lines.append(f"  - Max components used: {np.max(n_components_real_list)}\n")
+    mae_results_lines.append(f"  - Min components used: {np.min(n_components_real_list)}\n")
+    mae_results_lines.append(f"  - Average energy preserved (explained_variance_ratio_): {np.mean(energy_ratio_real_list)*100:.2f}%\n")
+    if singular_values_real_list:
+        mae_results_lines.append(f"  - Average energy magnitude (singular_values_): {np.mean(singular_values_real_list):.4f}\n")
+        mae_results_lines.append(f"  - Max energy magnitude: {np.max(singular_values_real_list):.4f}\n")
+        mae_results_lines.append(f"  - Min energy magnitude: {np.min(singular_values_real_list):.4f}\n")
+
+if n_components_imag_list:
+    mae_results_lines.append("\n[IMAGINARY Part Components]\n")
+    mae_results_lines.append(f"  - Average components used (n_components_): {np.mean(n_components_imag_list):.2f}\n")
+    mae_results_lines.append(f"  - Max components used: {np.max(n_components_imag_list)}\n")
+    mae_results_lines.append(f"  - Min components used: {np.min(n_components_imag_list)}\n")
+    mae_results_lines.append(f"  - Average energy preserved (explained_variance_ratio_): {np.mean(energy_ratio_imag_list)*100:.2f}%\n")
+    if singular_values_imag_list:
+        mae_results_lines.append(f"  - Average energy magnitude (singular_values_): {np.mean(singular_values_imag_list):.4f}\n")
+        mae_results_lines.append(f"  - Max energy magnitude: {np.max(singular_values_imag_list):.4f}\n")
+        mae_results_lines.append(f"  - Min energy magnitude: {np.min(singular_values_imag_list):.4f}\n")
+
+mae_results_lines.append("--- Mean Absolute Error (MAE) Summary ---\n\n")
 
 # Loop through only the test datasets to calculate MAE.
 for dataset in tqdm(test_set_robot + test_set_human, desc="Calculating MAE for Summary"):
